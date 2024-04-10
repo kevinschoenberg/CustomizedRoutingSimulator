@@ -4,6 +4,13 @@ nodes = []
 
 #TODO Message type class
 
+
+#TODO Connection class
+
+
+#TODO Network class
+
+
 class Node:
     def __init__(self, env, name, position, range, isLBR=False):
         self.env = env
@@ -43,7 +50,7 @@ class Node:
 def main():
 
     env = simpy.Environment()
-    node1 = Node(env, 'Node1', (0, 0), 4, True)
+    node1 = Node(env, 'Node1', (0, 0), 2, True)
     node2 = Node(env, 'Node2', (1, 1), 5)
     node3 = Node(env, 'Node3', (2, 1), 1)
     nodes.append(node1)
