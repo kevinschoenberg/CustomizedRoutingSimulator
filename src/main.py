@@ -2,9 +2,9 @@ import simpy
 import matplotlib.pyplot as plt
 import random
 
-NUM_NODES = 40
-AREA_X = 10
-AREA_Y = 10
+NUM_NODES = 10
+AREA_X = 3
+AREA_Y = 3
 
 
 class Message:
@@ -53,6 +53,8 @@ class Network:
     def plot_network(self):
         plt.figure(figsize=(8, 6))
         for node in self.nodes:
+            #write the node rank on the plot
+            plt.text(node.position[0], node.position[1], str(node.rank), fontsize=12, color='black', weight='bold')
             plt.plot(node.position[0], node.position[1], 'bo')  # Plot node position
             for neighbor_id in node.neighbors:
                 for node2 in self.nodes:
@@ -98,6 +100,9 @@ class Network:
 
     def in_range(self, node1, node2):
         return self.distance(node1, node2) <= node1.range
+
+    def get_node(self, node_id):
+        return [node for node in self.nodes if node.node_id == node_id][0]
     
 
 class Node:
@@ -111,8 +116,9 @@ class Node:
         self.isLBR = isLBR
         self.node_id = node_id
         self.neighbors = []
-        # parent candidates
-        # parent (max parent candidate)
+        self.rank = None
+        self.parent_candidates = []
+        self.parent = None
         # objective function (parent selection)
 
 
@@ -121,8 +127,10 @@ class Node:
     def run(self):
         self.network.broadcast(self, Message("ND", None, self.node_id))
         while True:
-            #if self.isLBR:
-                #self.network.broadcast(self, 'Hello from LBR ' + self.name)
+            if self.isLBR:
+                self.rank = 0
+                for neighbor in self.neighbors:
+                    self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank}, self.node_id))
 
             while self.inbox:
                 message: Message = self.inbox.pop(0)
@@ -136,7 +144,15 @@ class Node:
                         self.neighbors.append(message.sender_id)
                         yield self.env.timeout(0.1)
                     case "DIO":
-                        pass
+                        # add to parent candidates if the rank is not higher than the current rank
+                        if self.rank is None or self.rank > self.network.get_node(message.sender_id).rank:
+                            # only add if it is not already on the list
+                            if message.sender_id not in self.parent_candidates:
+                                self.parent_candidates.append(message.sender_id)
+                            # Update rank and send DIO message to neighbors
+                            self.rank = message.payload['rank'] + 1
+                            for neighbor in self.neighbors:
+                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank}, self.node_id))
                     case "DAO":
                         pass
                     case "DIS":  # Optional
@@ -156,8 +172,14 @@ def main():
     #for node in nodes:
         #node.discover_neighbors()
     
-    env.run(until=10)
+    env.run(until=50)
     network.plot_network()
+
+    #print the parent candidates fo each node
+    for node in network.nodes:
+        print(node.name + ' parent candidates: ' + str(node.parent_candidates))
+        print(node.name + ' rank: ' + str(node.rank))
+        print('-----------------------------------')
     
     
 
