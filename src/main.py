@@ -111,6 +111,11 @@ class Node:
         self.isLBR = isLBR
         self.node_id = node_id
         self.neighbors = []
+        # parent candidates
+        # parent (max parent candidate)
+        # objective function (parent selection)
+
+
         self.action = env.process(self.run())
 
     def run(self):
@@ -124,7 +129,7 @@ class Node:
 
                 match message.message_type:
                     case "ND":
-                        #Received ND message
+                        # Received ND message
                         self.network.send_message(self, message.sender_id, Message("ACK", None, self.node_id))
                         yield self.env.timeout(0.1)
                     case "ACK":
