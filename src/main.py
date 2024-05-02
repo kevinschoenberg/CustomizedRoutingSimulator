@@ -1,5 +1,6 @@
 import simpy
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 import random
 
 NUM_NODES = 10
@@ -53,19 +54,28 @@ class Network:
     def plot_network(self):
         plt.figure(figsize=(8, 6))
         for node in self.nodes:
-            #write the node rank on the plot
-            plt.text(node.position[0], node.position[1], str(node.rank), fontsize=12, color='black', weight='bold')
+            # Write the node ID and rank on the plot with some separation
+            plt.text(node.position[0] + 0.1, node.position[1], f"{node.node_id}", fontsize=12, color='blue', weight='bold', zorder=2)
+            plt.text(node.position[0] - 0.1, node.position[1], f"{node.rank}", fontsize=12, color='green', weight='bold', zorder=2)
             plt.plot(node.position[0], node.position[1], 'bo')  # Plot node position
             for neighbor_id in node.neighbors:
                 for node2 in self.nodes:
                     if node2.node_id == neighbor_id:
-                        plt.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-')  # Line between neighbors
+                        plt.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-', zorder=1)  # Line between neighbors
 
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.title('Network Topology')
+         # Create custom legend elements
+        blue_dot = mlines.Line2D([], [], color='blue', marker='o', markersize=10, label='ID')
+        green_dot = mlines.Line2D([], [], color='green', marker='o', markersize=10, label='Rank')
+        
+        # Add legend with custom legend elements
+        plt.legend(handles=[blue_dot, green_dot], loc='upper left')
         plt.grid(True)
         plt.show()
+
+
 
     def generate_nodes(self, env, n = 3, areaX = 10, areaY = 10):
         for i in range(n):
@@ -119,6 +129,8 @@ class Node:
         self.rank = None
         self.parent_candidates = []
         self.parent = None
+        self.instanceID = 0
+        self.routing_table = []
         # objective function (parent selection)
 
 
@@ -130,7 +142,7 @@ class Node:
             if self.isLBR:
                 self.rank = 0
                 for neighbor in self.neighbors:
-                    self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank}, self.node_id))
+                    self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID}, self.node_id))
 
             while self.inbox:
                 message: Message = self.inbox.pop(0)
@@ -148,13 +160,40 @@ class Node:
                         if self.rank is None or self.rank > self.network.get_node(message.sender_id).rank:
                             # only add if it is not already on the list
                             if message.sender_id not in self.parent_candidates:
-                                self.parent_candidates.append(message.sender_id)
+                                self.parent_candidates.append({"senderid": message.sender_id, "rank": message.payload['rank']})
                             # Update rank and send DIO message to neighbors
                             self.rank = message.payload['rank'] + 1
                             for neighbor in self.neighbors:
                                 self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank}, self.node_id))
+
+                            
+                            # Choose parent from parent candidates by choosing parent with the lowest rank
+                            self.parent_candidates.sort(key=lambda x: x['rank'])
+                            self.parent = self.parent_candidates[0]['senderid']
+                            # Send DAO message to parent
+                            self.network.send_message(self, self.parent, Message("DAO", self.routing_table, self.node_id))
                     case "DAO":
+                        #if the payload is empty add the sender to routing table
+                        if not message.payload and self.isLBR == False:
+                            self.routing_table.append({'destination': message.sender_id, 'nexthop': message.sender_id})
+                            # Send DAO-ACK message to sender of DAO message including this nodes parent
+                            self.network.send_message(self, message.sender_id, Message("DAO-ACK", None, self.node_id))
+                        else:
+                            for sender_routing_entry in message.payload:
+                                sender_destination = sender_routing_entry['destination']
+                                found_match = False
+                                for entry in self.routing_table:
+                                    if sender_destination == entry['destination']:
+                                        found_match = True
+                                if not found_match:
+                                    # If the payloads destination is not in the routing table, add it
+                                    self.routing_table.append({'destination': sender_routing_entry['destination'], 'nexthop': message.sender_id})
+                                    # Send DAO-ACK message to sender of DAO message including this nodes parent
+                                    self.network.send_message(self, message.sender_id, Message("DAO-ACK", None, self.node_id))
+                    case "DAO-ACK":
+                        #If approoved
                         pass
+
                     case "DIS":  # Optional
                         pass
 
@@ -180,7 +219,10 @@ def main():
         print(node.name + ' parent candidates: ' + str(node.parent_candidates))
         print(node.name + ' rank: ' + str(node.rank))
         print('-----------------------------------')
-    
+    for node in network.nodes:
+        if node.isLBR:
+            print(node.name + ' routing table: ' + str(node.routing_table))
+            print('-----------------------------------')
     
 
 
