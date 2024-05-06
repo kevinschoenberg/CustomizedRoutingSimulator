@@ -61,7 +61,14 @@ class Network:
             for neighbor_id in node.neighbors:
                 for node2 in self.nodes:
                     if node2.node_id == neighbor_id:
-                        plt.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-', zorder=1)  # Line between neighbors
+                        #plt.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-', zorder=1)  # Line between neighbors
+                        pass
+        #draw an arrow from each node to their parent
+        for node in self.nodes:
+            if node.parent is not None:
+                for parent in self.nodes:
+                    if parent.node_id == node.parent:
+                        plt.arrow(node.position[0], node.position[1], parent.position[0] - node.position[0], parent.position[1] - node.position[1], head_width=0.05, head_length=0.05, fc='k', ec='k', zorder=3)
 
         plt.xlabel('X')
         plt.ylabel('Y')
@@ -75,12 +82,10 @@ class Network:
         plt.grid(True)
         plt.show()
 
-
-
     def generate_nodes(self, env, n = 3, areaX = 10, areaY = 10):
         for i in range(n):
             isLBR = False
-            name = 'Node{}'.format(i + 1)
+            name = 'Node{}'.format(i)
             position = (random.uniform(0, areaX), random.uniform(0, areaY))  # Random position between (0, 0) and (10, 10)
             sigRange = 2
             if i == 0:
@@ -127,14 +132,22 @@ class Node:
         self.node_id = node_id
         self.neighbors = []
         self.rank = None
-        self.parent_candidates = []
+        self.parent_candidates = {}
         self.parent = None
         self.instanceID = 0
-        self.routing_table = []
+        self.routing_table = {}
         # objective function (parent selection)
 
 
         self.action = env.process(self.run())
+
+    def update_routing_table(self, routing_table, sender_id):
+        #update incomming routing table using the sender id as next hop if a new destiantion is found
+        for key, value in routing_table.items():
+            if key not in self.routing_table:
+                self.routing_table[key] = sender_id
+        if sender_id not in self.routing_table:
+            self.routing_table[sender_id] = sender_id
 
     def run(self):
         self.network.broadcast(self, Message("ND", None, self.node_id))
@@ -142,7 +155,7 @@ class Node:
             if self.isLBR:
                 self.rank = 0
                 for neighbor in self.neighbors:
-                    self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID}, self.node_id))
+                    self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table}, self.node_id))
 
             while self.inbox:
                 message: Message = self.inbox.pop(0)
@@ -160,36 +173,25 @@ class Node:
                         if self.rank is None or self.rank > self.network.get_node(message.sender_id).rank:
                             # only add if it is not already on the list
                             if message.sender_id not in self.parent_candidates:
-                                self.parent_candidates.append({"senderid": message.sender_id, "rank": message.payload['rank']})
+                                self.parent_candidates[message.sender_id] = message.payload['rank']
                             # Update rank and send DIO message to neighbors
                             self.rank = message.payload['rank'] + 1
                             for neighbor in self.neighbors:
-                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank}, self.node_id))
+                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table}, self.node_id))
 
-                            
-                            # Choose parent from parent candidates by choosing parent with the lowest rank
-                            self.parent_candidates.sort(key=lambda x: x['rank'])
-                            self.parent = self.parent_candidates[0]['senderid']
-                            # Send DAO message to parent
-                            self.network.send_message(self, self.parent, Message("DAO", self.routing_table, self.node_id))
+                            #choose the parent with the lowest rank from the dictionary #### TODO CHANGE TO USE OBJECTIVE FUNCTION ####
+                            self.parent = min(self.parent_candidates, key=self.parent_candidates.get)
+
+                        #self.update_routing_table(message.payload['routing_table'], message.sender_id)
+
+                        # Send DAO message to parent
+                        self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
                     case "DAO":
-                        #if the payload is empty add the sender to routing table
-                        if not message.payload and self.isLBR == False:
-                            self.routing_table.append({'destination': message.sender_id, 'nexthop': message.sender_id})
-                            # Send DAO-ACK message to sender of DAO message including this nodes parent
-                            self.network.send_message(self, message.sender_id, Message("DAO-ACK", None, self.node_id))
-                        else:
-                            for sender_routing_entry in message.payload:
-                                sender_destination = sender_routing_entry['destination']
-                                found_match = False
-                                for entry in self.routing_table:
-                                    if sender_destination == entry['destination']:
-                                        found_match = True
-                                if not found_match:
-                                    # If the payloads destination is not in the routing table, add it
-                                    self.routing_table.append({'destination': sender_routing_entry['destination'], 'nexthop': message.sender_id})
-                                    # Send DAO-ACK message to sender of DAO message including this nodes parent
-                                    self.network.send_message(self, message.sender_id, Message("DAO-ACK", None, self.node_id))
+
+                        self.update_routing_table(message.payload['routing_table'], message.sender_id)
+
+                        if self.parent is not None:
+                            self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
                     case "DAO-ACK":
                         #If approoved
                         pass
@@ -197,10 +199,6 @@ class Node:
                     case "DIS":  # Optional
                         pass
 
-
-                #print(self.name + ' received: ' + message)
-
-                #TODO Process message
 
             yield self.env.timeout(1)
 
@@ -220,10 +218,9 @@ def main():
         print(node.name + ' rank: ' + str(node.rank))
         print('-----------------------------------')
     for node in network.nodes:
-        if node.isLBR:
-            print(node.name + ' routing table: ' + str(node.routing_table))
-            print('-----------------------------------')
-    
+        #if node.isLBR:
+        print(node.name + ' routing table: ' + str(node.routing_table))
+        print('-----------------------------------')
 
 
 if __name__ == "__main__":
