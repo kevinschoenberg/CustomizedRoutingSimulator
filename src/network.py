@@ -32,11 +32,12 @@ class Network:
         self.generate_connections()
 
         while True:
-            if self.env.now > 40 and self.remove:
-                print(f"Removing node {self.nodes[7].node_id}")
-                self.nodes[7].alive = False
+            if self.env.now > 15 and self.remove:
+                node_id = 5
+                print(f"Removing node {self.nodes[node_id].node_id}")
+                self.nodes[node_id].alive = False
                 self.remove = False
-            yield self.env.timeout(3)
+            yield self.env.timeout(1)
     
     def update_plot(self):
         while True:
@@ -68,7 +69,13 @@ class Network:
                 # Write the node ID and rank on the plot with some separation
                 self.ax.text(node.position[0] + 0.1, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
                             weight='bold', zorder=2)
-                self.ax.text(node.position[0] - 0.1, node.position[1], f"{node.rank}", fontsize=12, color='green',
+                self.ax.text(node.position[0] - 0.1, node.position[1], f"{node.DAGrank}", fontsize=12, color='green',
+                            weight='bold', zorder=2)
+                if node.rank is not None:
+                    self.ax.text(node.position[0], node.position[1] + 0.1, f"{node.rank:.2f}", fontsize=12, color='red',
+                            weight='bold', zorder=2)
+                else:
+                    self.ax.text(node.position[0], node.position[1] + 0.1, f"{node.rank}", fontsize=12, color='red',
                             weight='bold', zorder=2)
 
                 if node.alive:
@@ -145,7 +152,7 @@ class Network:
         for node1 in self.nodes:
             for node2 in self.nodes:
                 if node1 != node2 and self.in_range(node1, node2):
-                    etx = self.distance(node1, node2)
+                    etx = (self.distance(node1, node2) + 1)**10
                     connection = Connection(node1, node2, etx=etx)
                     self.add_connection(connection)
 
@@ -168,3 +175,11 @@ class Network:
 
     def get_node(self, node_id):
         return [node for node in self.nodes if node.node_id == node_id][0]
+
+    def get_connection_metrics(self, node1, node2):
+
+        for connection in self.connections:
+            if connection.node1.node_id == node1 and connection.node2.node_id == node2:
+                return connection.ETX
+
+
