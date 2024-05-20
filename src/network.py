@@ -20,6 +20,7 @@ class Network:
         self.env = env
         self.nodes = []
         self.connections = []
+        self.remove = True
         self.action = env.process(self.run())
         self.plot_action = env.process(self.update_plot())
         self.fig, self.ax = plt.subplots(figsize=(8, 6))
@@ -31,6 +32,10 @@ class Network:
         self.generate_connections()
 
         while True:
+            if self.env.now > 40 and self.remove:
+                print(f"Removing node {self.nodes[7].node_id}")
+                self.nodes[7].alive = False
+                self.remove = False
             yield self.env.timeout(3)
     
     def update_plot(self):
@@ -46,6 +51,11 @@ class Network:
         self.connections.append(connection)
 
     def remove_node(self, node):
+        #delete node instance and remove connections
+        for connection in self.connections:
+            if connection.node1 == node or connection.node2 == node:
+                self.remove_connection(connection)
+
         self.nodes.remove(node)
 
     def remove_connection(self, connection):
@@ -60,7 +70,11 @@ class Network:
                             weight='bold', zorder=2)
                 self.ax.text(node.position[0] - 0.1, node.position[1], f"{node.rank}", fontsize=12, color='green',
                             weight='bold', zorder=2)
-                self.ax.plot(node.position[0], node.position[1], 'bo')  # Plot node position
+
+                if node.alive:
+                    self.ax.plot(node.position[0], node.position[1], 'bo')  # Plot node position
+                else:
+                    self.ax.plot(node.position[0], node.position[1], 'ro')
                 for neighbor_id in node.neighbors:
                     for node2 in self.nodes:
                         if node2.node_id == neighbor_id:
@@ -68,7 +82,7 @@ class Network:
                             pass
             # draw an arrow from each node to their parent
             for node in self.nodes:
-                if node.parent is not None:
+                if node.alive and node.parent is not None:
                     for parent in self.nodes:
                         if parent.node_id == node.parent:
                             self.ax.arrow(node.position[0], node.position[1], 0.9 * (parent.position[0] - node.position[0]),
