@@ -13,7 +13,7 @@ random.seed(0)
 NUM_NODES = 10
 AREA_X = 3
 AREA_Y = 3
-PLOT_INTERVAL = 0.1
+PLOT_INTERVAL = 0.2
 
 class Network:
     def __init__(self, env):
@@ -23,7 +23,7 @@ class Network:
         self.remove = True
         self.action = env.process(self.run())
         self.plot_action = env.process(self.update_plot())
-        self.fig, self.ax = plt.subplots(figsize=(8, 6))
+        self.fig, self.ax = plt.subplots(figsize=(10, 10))
         self.plot_count = 0
 
     def run(self):
@@ -67,21 +67,27 @@ class Network:
             self.plot_count += 1
             for node in self.nodes:
                 # Write the node ID and rank on the plot with some separation
-                self.ax.text(node.position[0] + 0.1, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
+                self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
                             weight='bold', zorder=2)
-                self.ax.text(node.position[0] - 0.1, node.position[1], f"{node.DAGrank}", fontsize=12, color='green',
+                self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12, color='green',
                             weight='bold', zorder=2)
                 if node.rank is not None:
-                    self.ax.text(node.position[0], node.position[1] + 0.1, f"{node.rank:.2f}", fontsize=12, color='red',
+                    self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank:.2f}", fontsize=12, color='red',
                             weight='bold', zorder=2)
                 else:
-                    self.ax.text(node.position[0], node.position[1] + 0.1, f"{node.rank}", fontsize=12, color='red',
+                    self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank}", fontsize=12, color='red',
                             weight='bold', zorder=2)
 
                 if node.alive:
                     self.ax.plot(node.position[0], node.position[1], 'bo')  # Plot node position
                 else:
                     self.ax.plot(node.position[0], node.position[1], 'ro')
+
+                #plot node range in a circle
+                if node.node_id == 3:
+                    self.ax.add_patch(plt.Circle((node.position[0], node.position[1]), node.range, color='gray', fill=False, zorder=1))
+
+
                 for neighbor_id in node.neighbors:
                     for node2 in self.nodes:
                         if node2.node_id == neighbor_id:
@@ -135,7 +141,7 @@ class Network:
             isLBR = False
             name = 'Node{}'.format(i)
 
-            # position = get_ith_node_position(n, i + 1)
+            #position = get_ith_node_position(n, i + 1)
             position = (random.uniform(0, areaX), random.uniform(0, areaY))
 
             sigRange = 1.3
@@ -156,10 +162,10 @@ class Network:
                     connection = Connection(node1, node2, etx=etx)
                     self.add_connection(connection)
 
-        for connection in self.connections:
-            if connection.node1.node_id in [4, 1] and connection.node2.node_id in [4, 1]:
-                print("removing ", connection.node1.node_id, connection.node2.node_id)
-                self.remove_connection(connection)
+        #for connection in self.connections:
+            #if connection.node1.node_id in [4, 1] and connection.node2.node_id in [4, 1]:
+                #print("removing ", connection.node1.node_id, connection.node2.node_id)
+                #self.remove_connection(connection)
 
     # Broadcast function, to be called by nodes
     def broadcast(self, node, message):

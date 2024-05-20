@@ -23,8 +23,9 @@ class Node:
         self.parent = None
         self.instanceID = 0
         self.routing_table = {}
-        self.last_dio = -3
+        self.last_dio = -39
         self.alive = True
+        self.last_gr = 0
 
         # objective function (parent selection)
 
@@ -74,8 +75,9 @@ class Node:
             self.DAGrank = 0
         while self.alive:
             if self.isLBR:
-                if self.env.now - self.last_dio > 5:
+                if self.env.now - self.last_dio > 40:
                     print(f"Node {self.node_id} is sending DIO")
+                    self.instanceID += 1
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table}, self.node_id))
                     self.last_dio = self.env.now
@@ -98,6 +100,14 @@ class Node:
                             print(self.neighbors)
                         yield self.env.timeout(0.1)
                     case "DIO":
+                        if message.payload['instanceID'] > self.instanceID:
+                            self.instanceID = message.payload['instanceID']
+                            self.parent_candidates = {}
+                            self.last_gr = 0
+                            self.parent = None
+                            self.rank = None
+                            self.DAGrank = None
+
                         # add to parent candidates if the rank is not higher than the current rank
                         if self.DAGrank is None or self.DAGrank > self.network.get_node(message.sender_id).DAGrank:
                             # only add if it is not already on the list
@@ -110,13 +120,14 @@ class Node:
                             self.update_parent()
 
                             for neighbor in self.neighbors.keys():
-                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table}, self.node_id))
+                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
 
                         #self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
                         if message.sender_id == self.parent and message.payload['rank'] > self.rank:
                             for neighbor in self.neighbors.keys():
-                                self.network.send_message(self, neighbor, Message("DIO", {'rank': 999999999, 'routing_table': self.routing_table}, self.node_id))
+                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
+
                         # Send DAO message to parent
                         self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
                     case "DAO":
@@ -135,6 +146,19 @@ class Node:
                     case "HB":
                         self.neighbors[message.sender_id] = self.env.now
 
+                    case "GR":
+                        if self.isLBR:
+                            self.instanceID += 1
+                            print(f"Node {self.node_id} is sending DIO")
+                            for neighbor in self.neighbors.keys():
+                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table},self.node_id))
+                            self.last_dio = self.env.now
+                        else:
+                            if not message.payload['nr'] > self.last_gr:
+                                self.last_gr = message.payload['nr']
+                                for neighbor in self.neighbors.keys():
+                                    self.network.send_message(self, neighbor, Message("GR", {'nr': message.payload['nr'] + 1}, self.node_id))
+
 
 
             # check if any storage nodes have not sent a heartbeat in the last 20 seconds
@@ -148,7 +172,8 @@ class Node:
             if self.parent not in self.neighbors.keys() and self.parent is not None:
                 self.parent = None
                 self.update_parent()
-                for neighbor in self.neighbors.keys():
-                    self.network.send_message(self, neighbor, Message("DIO", {'rank': 99999999, 'routing_table': self.routing_table}, self.node_id))
+                if self.parent is None:
+                    for neighbor in self.neighbors.keys():
+                        self.network.send_message(self, neighbor, Message("GR", {'nr': 0}, self.node_id))
 
             yield self.env.timeout(1)
