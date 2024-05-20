@@ -2,6 +2,7 @@ import simpy
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import random
+from matplotlib.animation import FuncAnimation
 
 from network import Network
 from node import Node
@@ -13,10 +14,13 @@ def main():
     network = Network(env)
 
     #for node in nodes:
-        #node.discover_neighbors()
+        #node.discover_neighbors())
     
+
     env.run(until=50)
-    network.plot_network()
+    
+    #network.plot_network()
+    
 
     #print the parent candidates fo each node
     for node in network.nodes:
@@ -27,7 +31,7 @@ def main():
         #if node.isLBR:
         print(node.name + ' routing table: ' + str(node.routing_table))
         print('-----------------------------------')
-
+    plt.show()
 
 if __name__ == "__main__":
     main()

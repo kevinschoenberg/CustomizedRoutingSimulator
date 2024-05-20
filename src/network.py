@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import random
+from matplotlib.animation import FuncAnimation
 
 from connection import Connection
 from message import Message
@@ -12,12 +13,17 @@ random.seed(0)
 NUM_NODES = 10
 AREA_X = 3
 AREA_Y = 3
+PLOT_INTERVAL = 0.1
+
 class Network:
     def __init__(self, env):
         self.env = env
         self.nodes = []
         self.connections = []
         self.action = env.process(self.run())
+        self.plot_action = env.process(self.update_plot())
+        self.fig, self.ax = plt.subplots(figsize=(8, 6))
+        self.plot_count = 0
 
     def run(self):
         # global NUM_NODES, AREA_X, AREA_Y
@@ -25,7 +31,13 @@ class Network:
         self.generate_connections()
 
         while True:
-            yield self.env.timeout(1)
+            yield self.env.timeout(3)
+    
+    def update_plot(self):
+        while True:
+            self.plot_network()
+            yield self.env.timeout(PLOT_INTERVAL)
+
 
     def add_node(self, node):
         self.nodes.append(node)
@@ -40,39 +52,42 @@ class Network:
         self.connections.remove(connection)
 
     def plot_network(self):
-        plt.figure(figsize=(8, 6))
-        for node in self.nodes:
-            # Write the node ID and rank on the plot with some separation
-            plt.text(node.position[0] + 0.1, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
-                     weight='bold', zorder=2)
-            plt.text(node.position[0] - 0.1, node.position[1], f"{node.rank}", fontsize=12, color='green',
-                     weight='bold', zorder=2)
-            plt.plot(node.position[0], node.position[1], 'bo')  # Plot node position
-            for neighbor_id in node.neighbors:
-                for node2 in self.nodes:
-                    if node2.node_id == neighbor_id:
-                        # plt.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-', zorder=1)  # Line between neighbors
-                        pass
-        # draw an arrow from each node to their parent
-        for node in self.nodes:
-            if node.parent is not None:
-                for parent in self.nodes:
-                    if parent.node_id == node.parent:
-                        plt.arrow(node.position[0], node.position[1], 0.9 * (parent.position[0] - node.position[0]),
-                                  0.9 * (parent.position[1] - node.position[1]), head_width=0.05, head_length=0.1,
-                                  fc='k', ec='k', zorder=3)
+            self.ax.clear()
+            self.plot_count += 1
+            for node in self.nodes:
+                # Write the node ID and rank on the plot with some separation
+                self.ax.text(node.position[0] + 0.1, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
+                            weight='bold', zorder=2)
+                self.ax.text(node.position[0] - 0.1, node.position[1], f"{node.rank}", fontsize=12, color='green',
+                            weight='bold', zorder=2)
+                self.ax.plot(node.position[0], node.position[1], 'bo')  # Plot node position
+                for neighbor_id in node.neighbors:
+                    for node2 in self.nodes:
+                        if node2.node_id == neighbor_id:
+                            # self.ax.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-', zorder=1)  # Line between neighbors
+                            pass
+            # draw an arrow from each node to their parent
+            for node in self.nodes:
+                if node.parent is not None:
+                    for parent in self.nodes:
+                        if parent.node_id == node.parent:
+                            self.ax.arrow(node.position[0], node.position[1], 0.9 * (parent.position[0] - node.position[0]),
+                                        0.9 * (parent.position[1] - node.position[1]), head_width=0.05, head_length=0.1,
+                                        fc='k', ec='k', zorder=3)
 
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title('Network Topology')
-        # Create custom legend elements
-        blue_dot = mlines.Line2D([], [], color='blue', marker='o', markersize=10, label='ID')
-        green_dot = mlines.Line2D([], [], color='green', marker='o', markersize=10, label='Rank')
+            self.ax.set_xlabel('X')
+            self.ax.set_ylabel('Y')
+            self.ax.set_title('Network Topology')
+            self.ax.text(0.5, 1.05, f"Plot Update Count: {self.plot_count}", transform=self.ax.transAxes,
+                     fontsize=14, color='red', weight='bold', ha='center')
+            # Create custom legend elements
+            blue_dot = mlines.Line2D([], [], color='blue', marker='o', markersize=10, label='ID')
+            green_dot = mlines.Line2D([], [], color='green', marker='o', markersize=10, label='Rank')
 
-        # Add legend with custom legend elements
-        plt.legend(handles=[blue_dot, green_dot], loc='upper left')
-        # plt.grid(True)
-        plt.show()
+            # Add legend with custom legend elements
+            self.ax.legend(handles=[blue_dot, green_dot], loc='upper left')
+            plt.draw()
+            plt.pause(0.01)
 
     def generate_nodes(self, env, n=3, areaX=10, areaY=10):
         # create a function that returns coordinates in a triangle based on number of nodes n and the current node i
