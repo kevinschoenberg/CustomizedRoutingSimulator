@@ -27,6 +27,7 @@ class Node:
         self.alive = True
         self.last_gr = 0
         self.log = log
+        self.sent_dio = False
 
         # objective function (parent selection)
 
@@ -83,32 +84,48 @@ class Node:
         while self.alive:
             if self.isLBR:
                 if self.env.now - self.last_dio > 80:
-                    if self.log:
-                        print(f"Node {self.node_id} is sending DIO")
+                    print(f"Node {self.node_id} is sending DIO")
                     self.instanceID += 1
                     self.routing_table = {}
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table}, self.node_id))
                     self.last_dio = self.env.now
 
-            if self.env.now - self.last_beat > 20:
+            if self.env.now - self.last_beat > 15:
                 for neighbor in self.neighbors.keys():
                     self.network.send_message(self, neighbor, Message("HB", None, self.node_id))
                 self.last_beat = self.env.now
 
             while self.inbox:
+                if self.log:
+
+                    senders = {}
+                    for message in self.inbox:
+                        if message.sender_id not in senders:
+                            senders[message.sender_id] = 1
+                        else:
+                            senders[message.sender_id] += 1
+                    #print(senders)
+
+                    # print distribution of message types in inbox
+                    message_types = {}
+                    for message in self.inbox:
+                        if message.message_type not in message_types:
+                            message_types[message.message_type] = 1
+                        else:
+                            message_types[message.message_type] += 1
+                    print(message_types)
+
                 message: Message = self.inbox.pop(0)
 
                 match message.message_type:
                     case "ND":
                         self.network.send_message(self, message.sender_id, Message("ACK", None, self.node_id))
-                        yield self.env.timeout(0.1)
                     case "ACK":
                         self.neighbors[message.sender_id] = self.env.now
                         if self.node_id == 0:
                             if self.log:
                                 print(self.neighbors)
-                        yield self.env.timeout(0.1)
                     case "DIO":
                         if message.payload['instanceID'] > self.instanceID:
                             self.instanceID = message.payload['instanceID']
@@ -117,35 +134,35 @@ class Node:
                             self.parent = None
                             self.rank = None
                             self.DAGrank = None
+                            self.sent_dio = False
                             #self.routing_table = {}
 
-                        if self.DAGrank is None or self.DAGrank > self.network.get_node(message.sender_id).DAGrank:
+                        if self.DAGrank is None or self.DAGrank > message.payload['DAGrank']:
                             # only add if it is not already on the list
+
                             self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
-
-                            self.update_parent()
-
                             self.routing_table = {}
 
-                            for neighbor in self.neighbors.keys():
-                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
-
-
+                            if self.isLBR:
+                                yield self.env.timeout(0.002)
+                            else:
+                                yield self.env.timeout(0.02)
                         #poison response
-                        if message.sender_id == self.parent and message.payload['rank'] > self.rank:
-                            for neighbor in self.neighbors.keys():
-                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
-
-                        # Send DAO message to parent
-                        self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
-                        yield self.env.timeout(0.1)
+                        #if message.sender_id == self.parent and message.payload['rank'] > self.rank:
+                            #for neighbor in self.neighbors.keys():
+                                #self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
+                        yield self.env.timeout(0.002)
                     case "DAO":
 
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
                         if self.parent is not None:
                             self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
-                        yield self.env.timeout(0.1)
+
+                        if self.isLBR:
+                            yield self.env.timeout(0.002)
+                        else:
+                            yield self.env.timeout(0.002)
                     case "DAO-ACK":
                         #If approoved
                         pass
@@ -155,7 +172,6 @@ class Node:
 
                     case "HB":
                         self.neighbors[message.sender_id] = self.env.now
-                        yield self.env.timeout(0.1)
 
                     case "GR":
                         if self.isLBR:
@@ -164,19 +180,38 @@ class Node:
                                 print(f"Node {self.node_id} is sending DIO")
                             self.routing_table = {}
                             for neighbor in self.neighbors.keys():
-                                self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table},self.node_id))
+                                self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table},self.node_id))
                             self.last_dio = self.env.now
                         else:
                             if not message.payload['nr'] > self.last_gr:
                                 self.last_gr = message.payload['nr']
                                 for neighbor in self.neighbors.keys():
                                     self.network.send_message(self, neighbor, Message("GR", {'nr': message.payload['nr'] + 1}, self.node_id))
-                        yield self.env.timeout(0.1)
+                        if self.isLBR:
+                            yield self.env.timeout(0.002)
+                        else:
+                            yield self.env.timeout(0.02)
 
+            if not self.isLBR:
+                old_parent = self.parent
+                self.update_parent()
+                if old_parent != self.parent or old_parent is None:
+                    # Send DAO message to parent
+                    self.network.send_message(self, self.parent,
+                                              Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+
+                    if self.DAGrank is not None:
+                        for neighbor in self.neighbors.keys():
+                            #if neighbor not in self.parent_candidates.keys():
+                            self.network.send_message(self, neighbor, Message("DIO",
+                                                                                  {'DAGrank': self.DAGrank, 'rank': self.rank,
+                                                                                   'routing_table': self.routing_table,
+                                                                                   'instanceID': self.instanceID},
+                                                                                  self.node_id))
 
             # check if any storage nodes have not sent a heartbeat in the last 20 seconds
             for node in list(self.neighbors.keys()):
-                if self.env.now - self.neighbors[node] > 30:
+                if self.env.now - self.neighbors[node] > 40:
                     if self.log:
                         print(f"Node {self.node_id} removing neighbor {node}")
                     del self.neighbors[node]
@@ -200,8 +235,9 @@ class Node:
                 self.update_parent()
                 if self.parent is None:
                     for neighbor in self.neighbors.keys():
+                        print(f"Node {self.node_id} sending GR")
                         self.network.send_message(self, neighbor, Message("GR", {'nr': 0}, self.node_id))
                 else:
                     self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
-            yield self.env.timeout(1)
+            yield self.env.timeout(0.1)

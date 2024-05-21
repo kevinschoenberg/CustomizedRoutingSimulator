@@ -10,9 +10,9 @@ from node import Node
 
 random.seed(0)
 
-NUM_NODES = 1000
-AREA_X = 20
-AREA_Y = 20
+NUM_NODES = 100
+AREA_X = 10
+AREA_Y = 10
 PLOT_INTERVAL = 0.2
 
 class Network:
@@ -44,7 +44,7 @@ class Network:
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
                 self.remove2 = False
-            yield self.env.timeout(3)
+            yield self.env.timeout(1)
     
     def update_plot(self):
         while True:
@@ -74,11 +74,13 @@ class Network:
             self.plot_count += 1
             for node in self.nodes:
                 # Write the node ID and rank on the plot with some separation
+                self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
+                             weight='bold', zorder=2)
+
                 if node.log:
-                    self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
-                                weight='bold', zorder=2)
-                    self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12, color='green',
-                                weight='bold', zorder=2)
+                    self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12,
+                                 color='green',
+                                 weight='bold', zorder=2)
                     if node.rank is not None:
                         self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank:.2f}", fontsize=12, color='red',
                                 weight='bold', zorder=2)
@@ -122,7 +124,7 @@ class Network:
             # Add legend with custom legend elements
             self.ax.legend(handles=[blue_dot, green_dot], loc='upper left')
             plt.draw()
-            plt.pause(0.001)
+            plt.pause(0.01)
 
     def generate_nodes(self, env, n=3, areaX=10, areaY=10):
         # create a function that returns coordinates in a triangle based on number of nodes n and the current node i
@@ -148,7 +150,7 @@ class Network:
         for i in range(n):
             isLBR = False
             log = False
-            log_nodes = []
+            log_nodes = [41]
             name = 'Node{}'.format(i)
 
             #position = get_ith_node_position(n, i + 1)
@@ -157,7 +159,6 @@ class Network:
             sigRange = 1.3
             if i == 0:
                 isLBR = True
-                log = True
 
             if i in log_nodes:
                 log = True
@@ -173,6 +174,8 @@ class Network:
             for node2 in self.nodes:
                 if node1 != node2 and self.in_range(node1, node2):
                     etx = (self.distance(node1, node2) + 1)**10
+
+                    #etx = self.distance(node1, node2)
                     connection = Connection(node1, node2, etx=etx)
                     self.add_connection(connection)
 
