@@ -23,7 +23,7 @@ class Node:
         self.parent = None
         self.instanceID = 0
         self.routing_table = {}
-        self.last_dio = -39
+        self.last_dio = -79
         self.alive = True
         self.last_gr = 0
         self.log = log
@@ -82,7 +82,7 @@ class Node:
             self.DAGrank = 0
         while self.alive:
             if self.isLBR:
-                if self.env.now - self.last_dio > 40:
+                if self.env.now - self.last_dio > 80:
                     if self.log:
                         print(f"Node {self.node_id} is sending DIO")
                     self.instanceID += 1
@@ -91,7 +91,7 @@ class Node:
                         self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table}, self.node_id))
                     self.last_dio = self.env.now
 
-            if self.env.now - self.last_beat > 5:
+            if self.env.now - self.last_beat > 20:
                 for neighbor in self.neighbors.keys():
                     self.network.send_message(self, neighbor, Message("HB", None, self.node_id))
                 self.last_beat = self.env.now
@@ -138,12 +138,14 @@ class Node:
 
                         # Send DAO message to parent
                         self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+                        yield self.env.timeout(0.1)
                     case "DAO":
 
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
                         if self.parent is not None:
                             self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+                        yield self.env.timeout(0.1)
                     case "DAO-ACK":
                         #If approoved
                         pass
@@ -153,6 +155,7 @@ class Node:
 
                     case "HB":
                         self.neighbors[message.sender_id] = self.env.now
+                        yield self.env.timeout(0.1)
 
                     case "GR":
                         if self.isLBR:
@@ -168,12 +171,12 @@ class Node:
                                 self.last_gr = message.payload['nr']
                                 for neighbor in self.neighbors.keys():
                                     self.network.send_message(self, neighbor, Message("GR", {'nr': message.payload['nr'] + 1}, self.node_id))
-
+                        yield self.env.timeout(0.1)
 
 
             # check if any storage nodes have not sent a heartbeat in the last 20 seconds
             for node in list(self.neighbors.keys()):
-                if self.env.now - self.neighbors[node] > 10:
+                if self.env.now - self.neighbors[node] > 30:
                     if self.log:
                         print(f"Node {self.node_id} removing neighbor {node}")
                     del self.neighbors[node]

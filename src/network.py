@@ -10,9 +10,9 @@ from node import Node
 
 random.seed(0)
 
-NUM_NODES = 10
-AREA_X = 3
-AREA_Y = 3
+NUM_NODES = 1000
+AREA_X = 20
+AREA_Y = 20
 PLOT_INTERVAL = 0.2
 
 class Network:
@@ -44,7 +44,7 @@ class Network:
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
                 self.remove2 = False
-            yield self.env.timeout(1)
+            yield self.env.timeout(3)
     
     def update_plot(self):
         while True:
@@ -74,16 +74,17 @@ class Network:
             self.plot_count += 1
             for node in self.nodes:
                 # Write the node ID and rank on the plot with some separation
-                self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
-                            weight='bold', zorder=2)
-                self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12, color='green',
-                            weight='bold', zorder=2)
-                if node.rank is not None:
-                    self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank:.2f}", fontsize=12, color='red',
-                            weight='bold', zorder=2)
-                else:
-                    self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank}", fontsize=12, color='red',
-                            weight='bold', zorder=2)
+                if node.log:
+                    self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
+                                weight='bold', zorder=2)
+                    self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12, color='green',
+                                weight='bold', zorder=2)
+                    if node.rank is not None:
+                        self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank:.2f}", fontsize=12, color='red',
+                                weight='bold', zorder=2)
+                    else:
+                        self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank}", fontsize=12, color='red',
+                                weight='bold', zorder=2)
 
                 if node.alive:
                     self.ax.plot(node.position[0], node.position[1], 'bo')  # Plot node position
@@ -91,7 +92,7 @@ class Network:
                     self.ax.plot(node.position[0], node.position[1], 'ro')
 
                 #plot node range in a circle
-                if node.node_id == 3:
+                if node.log:
                     self.ax.add_patch(plt.Circle((node.position[0], node.position[1]), node.range, color='gray', fill=False, zorder=1))
 
 
@@ -112,7 +113,7 @@ class Network:
             self.ax.set_xlabel('X')
             self.ax.set_ylabel('Y')
             self.ax.set_title('Network Topology')
-            self.ax.text(0.5, 1.05, f"Plot Update Count: {self.plot_count}", transform=self.ax.transAxes,
+            self.ax.text(0.5, 1.05, f"Plot Update Count: {self.plot_count * PLOT_INTERVAL:.2f}", transform=self.ax.transAxes,
                      fontsize=14, color='red', weight='bold', ha='center')
             # Create custom legend elements
             blue_dot = mlines.Line2D([], [], color='blue', marker='o', markersize=10, label='ID')
@@ -121,7 +122,7 @@ class Network:
             # Add legend with custom legend elements
             self.ax.legend(handles=[blue_dot, green_dot], loc='upper left')
             plt.draw()
-            plt.pause(0.01)
+            plt.pause(0.001)
 
     def generate_nodes(self, env, n=3, areaX=10, areaY=10):
         # create a function that returns coordinates in a triangle based on number of nodes n and the current node i
@@ -147,6 +148,7 @@ class Network:
         for i in range(n):
             isLBR = False
             log = False
+            log_nodes = []
             name = 'Node{}'.format(i)
 
             #position = get_ith_node_position(n, i + 1)
@@ -155,7 +157,9 @@ class Network:
             sigRange = 1.3
             if i == 0:
                 isLBR = True
-            if i == 2:
+                log = True
+
+            if i in log_nodes:
                 log = True
             node = Node(env, name, position, self, sigRange, i, isLBR=isLBR, log=log)
             self.add_node(node)
