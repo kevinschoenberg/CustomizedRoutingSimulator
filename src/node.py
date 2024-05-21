@@ -1,6 +1,7 @@
 import simpy
 import time
 import math
+from collections import Counter
 
 from message import Message
 
@@ -28,6 +29,9 @@ class Node:
         self.last_gr = 0
         self.log = log
         self.sent_dio = False
+        self.ip_routing_table = {}
+        self.ip_address = None
+        self.ip_prefix = None
 
         # objective function (parent selection)
 
@@ -76,6 +80,31 @@ class Node:
             self.rank = None
             self.DAGrank = None
 
+    def update_ip_routing_table(self):
+        self.ip_routing_table = {}
+        ip_address = None
+        ip_prefix = None
+        temp = 0
+        for value in Counter(self.routing_table.values()).keys():
+            temp += 1
+            if self.isLBR:
+                ip_address = f'2001:{hex(temp)[2:]}'
+                ip_prefix = 16 + len(hex(temp)[2:])*4
+            if not self.isLBR and self.ip_prefix is not None:
+                if ((len(self.ip_address)-(math.floor(len(self.ip_address)/5))) % 4 > 0):
+                    ip_address = f'{self.ip_address}{hex(temp)[2:]}'
+                else:
+                    ip_address = f'{self.ip_address}:{hex(temp)[2:]}'
+                ip_prefix = self.ip_prefix + len(hex(temp)[2:])*4
+            if ip_address is not None:
+                #Send DIO message to Node with id = value, informing them of their subnet
+                self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID, 'ip_address': ip_address, 'prefix': ip_prefix}, self.node_id))
+                #Update the nodes ip routing table
+                self.ip_routing_table[f'{ip_address}::/{ip_prefix}'] = value
+        #print(f'MAC: Node {self.node_id} Routing Table {self.routing_table.items()}')
+        print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
+                    
+
     def run(self):
         self.network.broadcast(self, Message("ND", None, self.node_id))
         if self.isLBR:
@@ -88,7 +117,7 @@ class Node:
                     self.instanceID += 1
                     self.routing_table = {}
                     for neighbor in self.neighbors.keys():
-                        self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table}, self.node_id))
+                        self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table, 'ip_address': None, 'prefix': None}, self.node_id))
                     self.last_dio = self.env.now
 
             if self.env.now - self.last_beat > 15:
@@ -136,6 +165,10 @@ class Node:
                             self.DAGrank = None
                             self.sent_dio = False
                             #self.routing_table = {}
+                        if message.payload['ip_address'] is not None and len(self.routing_table) > 0:
+                            self.ip_address = message.payload['ip_address']
+                            self.ip_prefix = message.payload['prefix']
+                            self.update_ip_routing_table()
 
                         if self.DAGrank is None or self.DAGrank > message.payload['DAGrank']:
                             # only add if it is not already on the list
@@ -155,6 +188,10 @@ class Node:
                     case "DAO":
 
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
+                        
+                        if self.isLBR and len(self.routing_table) > 0:
+                            self.update_ip_routing_table()
+                        
 
                         if self.parent is not None:
                             self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
@@ -180,7 +217,7 @@ class Node:
                                 print(f"Node {self.node_id} is sending DIO")
                             self.routing_table = {}
                             for neighbor in self.neighbors.keys():
-                                self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table},self.node_id))
+                                self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table, 'ip_address': None, 'prefix': None},self.node_id))
                             self.last_dio = self.env.now
                         else:
                             if not message.payload['nr'] > self.last_gr:
@@ -206,7 +243,9 @@ class Node:
                             self.network.send_message(self, neighbor, Message("DIO",
                                                                                   {'DAGrank': self.DAGrank, 'rank': self.rank,
                                                                                    'routing_table': self.routing_table,
-                                                                                   'instanceID': self.instanceID},
+                                                                                   'instanceID': self.instanceID,
+                                                                                   'ip_address': None,
+                                                                                   'prefix': None},
                                                                                   self.node_id))
 
             # check if any storage nodes have not sent a heartbeat in the last 20 seconds
