@@ -10,14 +10,15 @@ from node import Node
 
 random.seed(0)
 
-NUM_NODES = 100
-AREA_X = 10
-AREA_Y = 10
-PLOT_INTERVAL = 0.2
-
 class Network:
-    def __init__(self, env):
+    def __init__(self, env, number_of_nodes, area_x, area_y, heartbeat_interval, plot_interval):
         self.env = env
+        self.number_of_nodes = number_of_nodes
+        self.area_x = area_x
+        self.area_y = area_y
+        self.plot_interval = plot_interval
+        self.heartbeat_interval = heartbeat_interval
+
         self.nodes = []
         self.connections = []
         self.remove = True
@@ -28,13 +29,12 @@ class Network:
         self.plot_count = 0
 
     def run(self):
-        # global NUM_NODES, AREA_X, AREA_Y
-        self.generate_nodes(self.env, NUM_NODES, AREA_X, AREA_Y)
+        self.generate_nodes(self.heartbeat_interval)
         self.generate_connections()
 
         while True:
             if self.env.now > 15 and self.remove:
-                node_id = 5
+                node_id = 49
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
                 self.remove = False
@@ -49,7 +49,7 @@ class Network:
     def update_plot(self):
         while True:
             self.plot_network()
-            yield self.env.timeout(PLOT_INTERVAL)
+            yield self.env.timeout(self.plot_interval)
 
 
     def add_node(self, node):
@@ -115,7 +115,7 @@ class Network:
             self.ax.set_xlabel('X')
             self.ax.set_ylabel('Y')
             self.ax.set_title('Network Topology')
-            self.ax.text(0.5, 1.05, f"Plot Update Count: {self.plot_count * PLOT_INTERVAL:.2f}", transform=self.ax.transAxes,
+            self.ax.text(0.5, 1.05, f"Plot Update Count: {self.plot_count * self.plot_interval:.2f}", transform=self.ax.transAxes,
                      fontsize=14, color='red', weight='bold', ha='center')
             # Create custom legend elements
             blue_dot = mlines.Line2D([], [], color='blue', marker='o', markersize=10, label='ID')
@@ -123,10 +123,13 @@ class Network:
 
             # Add legend with custom legend elements
             self.ax.legend(handles=[blue_dot, green_dot], loc='upper left')
+            #plt.xlim(0, AREA_X)
+            #plt.ylim(8, 11)
+            self.ax.set_aspect('equal')
             plt.draw()
             plt.pause(0.01)
 
-    def generate_nodes(self, env, n=3, areaX=10, areaY=10):
+    def generate_nodes(self, heartbeat_interval):
         # create a function that returns coordinates in a triangle based on number of nodes n and the current node i
         def get_ith_node_position(n, i):
             if i > n or i < 1:
@@ -147,22 +150,22 @@ class Network:
 
             return positions[i - 1]
 
-        for i in range(n):
-            isLBR = False
+        for i in range(self.number_of_nodes):
+            is_lbr = False
             log = False
-            log_nodes = [41]
+            log_nodes = [49]
             name = 'Node{}'.format(i)
 
             #position = get_ith_node_position(n, i + 1)
-            position = (random.uniform(0, areaX), random.uniform(0, areaY))
+            position = (random.uniform(0, self.area_x), random.uniform(0, self.area_y))
 
             sigRange = 1.3
             if i == 0:
-                isLBR = True
+                is_lbr = True
 
             if i in log_nodes:
                 log = True
-            node = Node(env, name, position, self, sigRange, i, isLBR=isLBR, log=log)
+            node = Node(self.env, name, position, self, sigRange, i, heartbeat_interval, is_lbr=is_lbr, log=log)
             self.add_node(node)
 
     def distance(self, node1, node2):
@@ -173,9 +176,7 @@ class Network:
         for node1 in self.nodes:
             for node2 in self.nodes:
                 if node1 != node2 and self.in_range(node1, node2):
-                    etx = (self.distance(node1, node2) + 1)**10
-
-                    #etx = self.distance(node1, node2)
+                    etx = self.distance(node1, node2)/1.3 + 1
                     connection = Connection(node1, node2, etx=etx)
                     self.add_connection(connection)
 
