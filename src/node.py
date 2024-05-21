@@ -6,7 +6,7 @@ from message import Message
 
 
 class Node:
-    def __init__(self, env, name, position, network, range, node_id, isLBR=False):
+    def __init__(self, env, name, position, network, range, node_id, isLBR=False, log=False):
         self.env= env
         self.name = name
         self.position = position
@@ -26,18 +26,25 @@ class Node:
         self.last_dio = -39
         self.alive = True
         self.last_gr = 0
+        self.log = log
 
         # objective function (parent selection)
 
         self.action = env.process(self.run())
 
     def update_routing_table(self, routing_table, sender_id):
-        #update incomming routing table using the sender id as next hop if a new destiantion is found
-        for key, value in routing_table.items():
-            if key not in self.routing_table:
-                self.routing_table[key] = sender_id
-        if sender_id not in self.routing_table:
-            self.routing_table[sender_id] = sender_id
+        keys_to_delete = []
+        for key, value in self.routing_table.items():
+            if value == sender_id:
+                keys_to_delete.append(key)
+
+        for key in keys_to_delete:
+            self.routing_table.pop(key)
+
+        for key, _ in routing_table.items():
+            self.routing_table[key] = sender_id
+
+        self.routing_table[sender_id] = sender_id
 
     @staticmethod
     def objective_function(parent_rank, rank_step):
@@ -76,8 +83,10 @@ class Node:
         while self.alive:
             if self.isLBR:
                 if self.env.now - self.last_dio > 40:
-                    print(f"Node {self.node_id} is sending DIO")
+                    if self.log:
+                        print(f"Node {self.node_id} is sending DIO")
                     self.instanceID += 1
+                    self.routing_table = {}
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table}, self.node_id))
                     self.last_dio = self.env.now
@@ -97,7 +106,8 @@ class Node:
                     case "ACK":
                         self.neighbors[message.sender_id] = self.env.now
                         if self.node_id == 0:
-                            print(self.neighbors)
+                            if self.log:
+                                print(self.neighbors)
                         yield self.env.timeout(0.1)
                     case "DIO":
                         if message.payload['instanceID'] > self.instanceID:
@@ -107,23 +117,21 @@ class Node:
                             self.parent = None
                             self.rank = None
                             self.DAGrank = None
+                            #self.routing_table = {}
 
-                        # add to parent candidates if the rank is not higher than the current rank
                         if self.DAGrank is None or self.DAGrank > self.network.get_node(message.sender_id).DAGrank:
                             # only add if it is not already on the list
                             self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
-                            # Update rank and send DIO message to neighbors
-                            #self.rank = message.payload['rank'] + self.network.get_connection_metrics(self.node_id, message.sender_id)
 
-
-                            #choose the parent with the lowest rank from the dictionary
                             self.update_parent()
+
+                            self.routing_table = {}
 
                             for neighbor in self.neighbors.keys():
                                 self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
 
-                        #self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
+                        #poison response
                         if message.sender_id == self.parent and message.payload['rank'] > self.rank:
                             for neighbor in self.neighbors.keys():
                                 self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID}, self.node_id))
@@ -149,7 +157,9 @@ class Node:
                     case "GR":
                         if self.isLBR:
                             self.instanceID += 1
-                            print(f"Node {self.node_id} is sending DIO")
+                            if self.log:
+                                print(f"Node {self.node_id} is sending DIO")
+                            self.routing_table = {}
                             for neighbor in self.neighbors.keys():
                                 self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank, 'instanceID': self.instanceID, 'routing_table': self.routing_table},self.node_id))
                             self.last_dio = self.env.now
@@ -164,8 +174,21 @@ class Node:
             # check if any storage nodes have not sent a heartbeat in the last 20 seconds
             for node in list(self.neighbors.keys()):
                 if self.env.now - self.neighbors[node] > 10:
-                    print(f"Node {self.node_id} removing neighbor {node}")
+                    if self.log:
+                        print(f"Node {self.node_id} removing neighbor {node}")
                     del self.neighbors[node]
+
+                    keys_to_delete = []
+                    for key, value in self.routing_table.items():
+                        if value == node or key == node:
+                            keys_to_delete.append(key)
+
+                    for key in keys_to_delete:
+                        self.routing_table.pop(key)
+
+                    if self.parent is not None:
+                        self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+
                     if node in self.parent_candidates:
                         del self.parent_candidates[node]
 
@@ -175,5 +198,7 @@ class Node:
                 if self.parent is None:
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("GR", {'nr': 0}, self.node_id))
+                else:
+                    self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
             yield self.env.timeout(1)

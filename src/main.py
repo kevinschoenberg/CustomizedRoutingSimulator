@@ -17,7 +17,7 @@ def main():
         #node.discover_neighbors())
     
 
-    env.run(until=100)
+    env.run(until=50)
     
     #network.plot_network()
     

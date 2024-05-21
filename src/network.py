@@ -21,6 +21,7 @@ class Network:
         self.nodes = []
         self.connections = []
         self.remove = True
+        self.remove2 = True
         self.action = env.process(self.run())
         self.plot_action = env.process(self.update_plot())
         self.fig, self.ax = plt.subplots(figsize=(10, 10))
@@ -37,6 +38,12 @@ class Network:
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
                 self.remove = False
+
+            if self.env.now > 30 and self.remove2:
+                node_id = 1
+                print(f"Removing node {self.nodes[node_id].node_id}")
+                self.nodes[node_id].alive = False
+                self.remove2 = False
             yield self.env.timeout(1)
     
     def update_plot(self):
@@ -99,7 +106,7 @@ class Network:
                     for parent in self.nodes:
                         if parent.node_id == node.parent:
                             self.ax.arrow(node.position[0], node.position[1], 0.9 * (parent.position[0] - node.position[0]),
-                                        0.9 * (parent.position[1] - node.position[1]), head_width=0.05, head_length=0.1,
+                                        0.9 * (parent.position[1] - node.position[1]), head_width=0.05, head_length=0.05,
                                         fc='k', ec='k', zorder=3)
 
             self.ax.set_xlabel('X')
@@ -139,6 +146,7 @@ class Network:
 
         for i in range(n):
             isLBR = False
+            log = False
             name = 'Node{}'.format(i)
 
             #position = get_ith_node_position(n, i + 1)
@@ -147,7 +155,9 @@ class Network:
             sigRange = 1.3
             if i == 0:
                 isLBR = True
-            node = Node(env, name, position, self, sigRange, i, isLBR=isLBR)
+            if i == 2:
+                log = True
+            node = Node(env, name, position, self, sigRange, i, isLBR=isLBR, log=log)
             self.add_node(node)
 
     def distance(self, node1, node2):
