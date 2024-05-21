@@ -2,6 +2,7 @@ import math
 
 from message import Message
 
+from collections import Counter
 
 class Node:
     def __init__(self, env, name, position, network, node_range, node_id, heartbeat_interval, is_lbr=False, log=False):
@@ -28,6 +29,33 @@ class Node:
         self.last_dodag = -79
         self.alive = True
         self.last_gr = 0
+        self.ip_routing_table = {}
+        self.ip_address = None
+        self.ip_prefix = None
+
+    def update_ip_routing_table(self):
+        self.ip_routing_table = {}
+        ip_address = None
+        ip_prefix = None
+        temp = 0
+        for value in Counter(self.routing_table.values()).keys():
+            temp += 1
+            if self.isLBR:
+                ip_address = f'2001:{hex(temp)[2:]}'
+                ip_prefix = 16 + len(hex(temp)[2:])*4
+            if not self.isLBR and self.ip_prefix is not None:
+                if ((len(self.ip_address)-(math.floor(len(self.ip_address)/5))) % 4 > 0):
+                    ip_address = f'{self.ip_address}{hex(temp)[2:]}'
+                else:
+                    ip_address = f'{self.ip_address}:{hex(temp)[2:]}'
+                ip_prefix = self.ip_prefix + len(hex(temp)[2:])*4
+            if ip_address is not None:
+                #Send DIO message to Node with id = value, informing them of their subnet
+                self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID, 'ip_address': ip_address, 'prefix': ip_prefix}, self.node_id))
+                #Update the nodes ip routing table
+                self.ip_routing_table[f'{ip_address}::/{ip_prefix}'] = value
+        #print(f'MAC: Node {self.node_id} Routing Table {self.routing_table.items()}')
+        print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
 
     def run(self):
         self.network.broadcast(self, Message("ND", None, self.node_id))
@@ -48,7 +76,9 @@ class Node:
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank,
                                                                                   'instanceID': self.instanceID,
-                                                                                  'routing_table': self.routing_table},
+                                                                                  'routing_table': self.routing_table,
+                                                                                  'ip_address': None,
+                                                                                  'prefix': None},
                                                                           self.node_id))
                     self.last_dodag = self.env.now
 
@@ -72,6 +102,11 @@ class Node:
                             self.rank = None
                             self.DAGrank = None
 
+                        if message.payload['ip_address'] is not None and len(self.routing_table) > 0:
+                            self.ip_address = message.payload['ip_address']
+                            self.ip_prefix = message.payload['prefix']
+                            self.update_ip_routing_table()
+
                         if self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
                             # only add if it is not already on the list
 
@@ -94,7 +129,8 @@ class Node:
                             self.network.send_message(self, self.parent,
                                                       Message("DAO", {'routing_table': self.routing_table},
                                                               self.node_id))
-
+                        if self.isLBR and len(self.routing_table) > 0:
+                                    self.update_ip_routing_table()
                         if self.isLBR:
                             yield self.env.timeout(0.002)
                         else:
@@ -119,7 +155,9 @@ class Node:
                                 self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank,
                                                                                           'rank': self.rank,
                                                                                           'instanceID': self.instanceID,
-                                                                                          'routing_table': self.routing_table},
+                                                                                          'routing_table': self.routing_table,
+                                                                                          'ip_address': None,
+                                                                                          'prefix': None},
                                                                                   self.node_id))
                             self.last_dodag = self.env.now
                         else:
@@ -157,7 +195,9 @@ class Node:
                                                               {'DAGrank': self.DAGrank,
                                                                'rank': self.rank,
                                                                'routing_table': self.routing_table,
-                                                               'instanceID': self.instanceID},
+                                                               'instanceID': self.instanceID,
+                                                               'ip_address': None,
+                                                               'prefix': None},
                                                               self.node_id))
 
             # Check if neighbors are still alive
