@@ -99,7 +99,7 @@ class Node:
             if self.node_id == 2:
                 if self.env.now - self.last_ip > 11:
                     destination = '2001::1'
-                    source = '2001:4::1'
+                    source = self.ip_address
                     self.network.send_message(self, self.parent, Message("IP", {'destination': destination,'source': source}, self.node_id))
                     self.last_ip = self.env.now
 
@@ -196,7 +196,7 @@ class Node:
                         else:
                             yield self.env.timeout(0.02)
                     case "IP":
-                        print(f"Node {self.node_id} with Subnet: {self.subnet}")
+                        #print(f"Node {self.node_id} with Subnet: {self.subnet}")
                         if self.ip_address == message.payload['destination']:
                             print(f"Node {self.node_id} Received IP message from {message.payload['source']}")
                         elif message.payload['destination'] in self.ip_routing_table.keys():
