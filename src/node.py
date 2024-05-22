@@ -99,10 +99,10 @@ class Node:
                                                                           self.node_id))
                     self.last_dodag = self.env.now
                 if self.env.now - self.last_ip > 10:
-                    destination = '2001:4::1'
+                    destination = '2001:3::1'
                     source = 'LBR'
                     #print(f"Sender id: {self.ip_routing_table[self.subnet_routing_table['2001:4::/20']]}")
-                    self.network.send_message(self, self.ip_routing_table[self.subnet_routing_table['2001:4::/20']], Message("IP", {'destination': destination,'source': source}, self.node_id))
+                    self.network.send_message(self, self.ip_routing_table[self.subnet_routing_table['2001:3::/20']], Message("IP", {'destination': destination,'source': source}, self.node_id))
                     self.last_ip = self.env.now
             if self.node_id == 2:
                 if self.env.now - self.last_ip > 11:
