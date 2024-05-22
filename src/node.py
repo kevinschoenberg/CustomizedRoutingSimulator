@@ -39,16 +39,6 @@ class Node:
         self.subnet = None
         self.ip_prefix = None
 
-        # objective function (parent selection)
-    def update_ip_routing_table(self):
-        self.ip_routing_table = {}
-        self.subnet_routing_table = {}
-        ip_address = None
-        subnet = None
-        self.ip_routing_table = {}
-        self.ip_address = None
-        self.ip_prefix = None
-
     def update_ip_routing_table(self):
         self.ip_routing_table = {}
         ip_address = None
