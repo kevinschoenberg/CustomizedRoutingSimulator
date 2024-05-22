@@ -9,8 +9,6 @@ from node import Node
 from connection import Connection
 from message import Message
 
-<<<<<<< Updated upstream
-=======
 NUM_NODES = 10
 AREA_X = 3
 AREA_Y = 3
@@ -19,21 +17,13 @@ PLOT_INTERVAL = 0.2
 HEARTBEAT_INTERVAL = 20
 
 
->>>>>>> Stashed changes
 def main():
     env = simpy.Environment()
-    network = Network(env)
-
-    #for node in nodes:
-        #node.discover_neighbors())
-    
+    network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL)
 
     env.run(until=80)
-    
-    #network.plot_network()
-    
 
-    #print the parent candidates fo each node
+    # print the parent candidates fo each node
     for node in network.nodes:
         print(node.name + ' parent candidates: ' + str(node.parent_candidates))
         print(node.name + ' rank: ' + str(node.rank))
@@ -43,6 +33,7 @@ def main():
         print(node.name + ' routing table: ' + str(node.routing_table))
         print('-----------------------------------')
     plt.show()
+
 
 if __name__ == "__main__":
     main()
