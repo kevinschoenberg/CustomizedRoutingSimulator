@@ -32,6 +32,7 @@ class Node:
         self.last_gr = 0
         self.log = log
         self.sent_dio = False
+
         self.last_ip = 0
         self.ip_routing_table = {}
         self.subnet_routing_table = {}
@@ -63,7 +64,7 @@ class Node:
                 #Update the nodes ip routing table
                 self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
                 self.ip_routing_table[ip_address] = value
-        #print(f'MAC: Node {self.node_id} Routing Table {self.routing_table.items()}')
+        
         print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
         print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
 
@@ -200,14 +201,23 @@ class Node:
                         elif message.payload['destination'] in self.ip_routing_table.keys():
                             for ip_address in self.ip_routing_table.keys() :
                                 if ip_address == message.payload['destination']:
-                                    self.network.send_message(self, self.ip_routing_table[ip_address], message)
+                                    self.network.send_message(self, self.ip_routing_table[ip_address],
+                                                              Message("IP", {'destination': message.payload['destination'],
+                                                                             'source': message.payload['source'],},
+                                                                             self.node_id))
                         elif message.payload['destination'][0:len(self.subnet)] in self.subnet_routing_table.keys():
                             print(f"Destination: {message.payload['destination']} Prefix length {len(self.subnet)}")
                             for subnet in self.subnet_routing_table.keys():
                                 if subnet == message.payload['destination'][0:len(self.subnet)]:
-                                    self.network.send_message(self, self.ip_routing_table[self.subnet_routing_table[subnet]], message)
+                                    self.network.send_message(self, self.ip_routing_table[self.subnet_routing_table[subnet]], 
+                                                              Message("IP", {'destination': message.payload['destination'],
+                                                                             'source': message.payload['source'],},
+                                                                             self.node_id))
                         elif self.parent is not None:
-                            self.network.send_message(self, self.parent, message)
+                            self.network.send_message(self, self.parent,
+                                                      Message("IP", {'destination': message.payload['destination'],
+                                                                             'source': message.payload['source'],},
+                                                                             self.node_id))
                         else:
                             print(f"Address {message.payload['destination']} not in network")
 
