@@ -121,10 +121,8 @@ class Node:
             if self.node_id == 2:
                 if self.env.now - self.last_ip > 40:
                     destination = '2001::1'
-                    source = '2001:4::1'
-                    self.network.send_message(self, self.parent,
-                                              Message("IP", {'destination': destination, 'source': source},
-                                                      self.node_id))
+                    source = self.ip_address
+                    self.network.send_message(self, self.parent, Message("IP", {'destination': destination,'source': source}, self.node_id))
                     self.last_ip = self.env.now
 
             # Process incoming messages
@@ -139,7 +137,6 @@ class Node:
                             if self.log:
                                 print(self.neighbors)
                     case "DIO":
-                        if message.payload['rank'] is None:
                         if message.payload['instanceID'] > self.instanceID or (not self.grounded and message.payload['grounded']):
                             if not self.grounded:
                                 if message.payload['grounded']:
