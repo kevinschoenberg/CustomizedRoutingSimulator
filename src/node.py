@@ -63,10 +63,6 @@ class Node:
             self.rank = 0
             self.DAGrank = 0
         while self.alive:
-
-            if self.log:
-                print(f"neighbors of {self.node_id}: {self.neighbors}")
-
             # Root node periodically initiates new DODAG
             if self.isLBR:
                 if self.env.now - self.last_dodag > 80:
@@ -114,7 +110,7 @@ class Node:
                                                                                                 self.network.get_connection_metrics(
                                                                                                     self.node_id,
                                                                                                     message.sender_id))
-                            self.routing_table = {}
+                            #self.routing_table = {}
 
                             if self.isLBR:
                                 yield self.env.timeout(0.002)

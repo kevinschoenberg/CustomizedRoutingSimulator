@@ -34,7 +34,7 @@ class Network:
 
         while True:
             if self.env.now > 15 and self.remove:
-                node_id = 49
+                node_id = 5
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
                 self.remove = False
@@ -76,11 +76,12 @@ class Network:
                 # Write the node ID and rank on the plot with some separation
                 self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
                              weight='bold', zorder=2)
-
+                self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12,
+                             color='green',
+                             weight='bold', zorder=2)
+                self.ax.text(node.position[0], node.position[1] - 0.2, f"{node.ip_address}", fontsize=12, color='black',)
                 if node.log:
-                    self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12,
-                                 color='green',
-                                 weight='bold', zorder=2)
+
                     if node.rank is not None:
                         self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank:.2f}", fontsize=12, color='red',
                                 weight='bold', zorder=2)
