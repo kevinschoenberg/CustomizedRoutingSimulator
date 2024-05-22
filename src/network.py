@@ -11,13 +11,14 @@ from node import Node
 random.seed(0)
 
 class Network:
-    def __init__(self, env, number_of_nodes, area_x, area_y, heartbeat_interval, plot_interval):
+    def __init__(self, env, number_of_nodes, area_x, area_y, heartbeat_interval, plot_interval, dis_interval):
         self.env = env
         self.number_of_nodes = number_of_nodes
         self.area_x = area_x
         self.area_y = area_y
         self.plot_interval = plot_interval
         self.heartbeat_interval = heartbeat_interval
+        self.dis_interval = dis_interval
 
         self.nodes = []
         self.connections = []
@@ -29,7 +30,7 @@ class Network:
         self.plot_count = 0
 
     def run(self):
-        self.generate_nodes(self.heartbeat_interval)
+        self.generate_nodes(self.heartbeat_interval, self.dis_interval)
         self.generate_connections()
 
         while True:
@@ -39,11 +40,19 @@ class Network:
                 self.nodes[node_id].alive = False
                 self.remove = False
 
-            if self.env.now > 30 and self.remove2:
+            if self.env.now > 2000 and self.remove2:
                 node_id = 1
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
+
+
+            if self.env.now > 80 and self.remove2:
+                self.add_node(Node(self.env, 'Node{}'.format(1), (3.5, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
+                self.add_node(
+                    Node(self.env, 'Node{}'.format(1), (3, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval,
+                         self.dis_interval, is_lbr=False, log=False))
                 self.remove2 = False
+                self.generate_connections()
             yield self.env.timeout(1)
     
     def update_plot(self):
@@ -90,7 +99,10 @@ class Network:
                                 weight='bold', zorder=2)
 
                 if node.alive:
-                    self.ax.plot(node.position[0], node.position[1], 'bo')  # Plot node position
+                    if node.isLBR:
+                        self.ax.plot(node.position[0], node.position[1], 'go')  # Plot node position
+                    else:
+                        self.ax.plot(node.position[0], node.position[1], 'bo')
                 else:
                     self.ax.plot(node.position[0], node.position[1], 'ro')
 
@@ -130,7 +142,7 @@ class Network:
             plt.draw()
             plt.pause(0.01)
 
-    def generate_nodes(self, heartbeat_interval):
+    def generate_nodes(self, heartbeat_interval ,dis_interval):
         # create a function that returns coordinates in a triangle based on number of nodes n and the current node i
         def get_ith_node_position(n, i):
             if i > n or i < 1:
@@ -166,7 +178,7 @@ class Network:
 
             if i in log_nodes:
                 log = True
-            node = Node(self.env, name, position, self, sigRange, i, heartbeat_interval, is_lbr=is_lbr, log=log)
+            node = Node(self.env, name, position, self, sigRange, i, heartbeat_interval, dis_interval, is_lbr=is_lbr, log=log)
             self.add_node(node)
 
     def distance(self, node1, node2):
@@ -177,9 +189,10 @@ class Network:
         for node1 in self.nodes:
             for node2 in self.nodes:
                 if node1 != node2 and self.in_range(node1, node2):
-                    etx = self.distance(node1, node2)/1.3 + 1
+                    etx = (self.distance(node1, node2)/1.3+1)**4
                     connection = Connection(node1, node2, etx=etx)
-                    self.add_connection(connection)
+                    if connection not in self.connections:
+                        self.add_connection(connection)
 
         #for connection in self.connections:
             #if connection.node1.node_id in [4, 1] and connection.node2.node_id in [4, 1]:

@@ -4,9 +4,10 @@ from collections import Counter
 from message import Message
 
 from collections import Counter
+import random
 
 class Node:
-    def __init__(self, env, name, position, network, node_range, node_id, heartbeat_interval, is_lbr=False, log=False):
+    def __init__(self, env, name, position, network, node_range, node_id, heartbeat_interval, dis_interval, is_lbr=False, log=False):
         self.env = env
         self.name = name
         self.position = position
@@ -16,7 +17,9 @@ class Node:
         self.node_id = node_id
         self.log = log
         self.heartbeat_interval = heartbeat_interval
+        self.dis_interval = dis_interval
         self.action = env.process(self.run())
+        self.original_dis_interval = self.dis_interval
 
         self.inbox = []
         self.neighbors = {}
@@ -32,6 +35,9 @@ class Node:
         self.last_gr = 0
         self.log = log
         self.sent_dio = False
+        self.grounded = False
+        self.last_dis = 0
+        self.dis_count = 0
 
         self.last_ip = 0
         self.ip_routing_table = {}
@@ -45,35 +51,48 @@ class Node:
         self.subnet_routing_table = {}
         ip_address = None
         ip_prefix = None
-        temp = 0
+        subnet = None
+        temp = None
+        if self.isLBR:
+            temp = self.node_id
+            self.subnet = '2001:'
+            self.ip_address = f'2001::{temp}'
+
         for value in Counter(self.routing_table.values()).keys():
-            temp += 1
+            temp = value
             if self.isLBR:
                 subnet = f'2001:{hex(temp)[2:]}'
-                ip_prefix = 16 + len(hex(temp)[2:])*4
-                ip_address = f'2001::{temp}'
+                ip_prefix = 16 + len(hex(temp)[2:]) * 4
+                ip_address = f'2001::{hex(temp)[2:]}'
             if not self.isLBR and self.ip_prefix is not None:
-                ip_address = f'{self.subnet}::{temp}'
-                if ((len(self.subnet)-(math.floor(len(self.subnet)/5))) % 4 > 0):
+                ip_address = f'{self.subnet}::{hex(temp)[2:]}'
+                if ((len(self.subnet) - (math.floor(len(self.subnet) / 5))) % 4 > 0):
                     subnet = f'{self.subnet}{hex(temp)[2:]}'
                 else:
                     subnet = f'{self.subnet}:{hex(temp)[2:]}'
-                ip_prefix = self.ip_prefix + len(hex(temp)[2:])*4
-            if subnet is not None:
+                ip_prefix = self.ip_prefix + len(hex(temp)[2:]) * 4
+            if subnet is not None and self.rank is not None:
                 #Send DIO message to Node with id = value, informing them of their subnet
-                self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank, 'routing_table': self.routing_table, 'instanceID': self.instanceID, 'subnet': subnet, 'ip_address': ip_address, 'prefix': ip_prefix}, self.node_id))
+                self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
+                                                                       'routing_table': self.routing_table,
+                                                                       'instanceID': self.instanceID, 'subnet': subnet,
+                                                                       'ip_address': ip_address, 'prefix': ip_prefix, 'grounded': self.grounded},
+                                                               self.node_id))
                 #Update the nodes ip routing table
                 self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
                 self.ip_routing_table[ip_address] = value
-        
+
         print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
         print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
 
     def run(self):
+        self.dis_interval *= random.uniform(1, 4)
+        self.original_dis_interval = self.dis_interval
         self.network.broadcast(self, Message("ND", None, self.node_id))
         if self.isLBR:
             self.rank = 0
             self.DAGrank = 0
+            self.grounded = True
         while self.alive:
             # Root node periodically initiates new DODAG
             if self.isLBR:
@@ -82,25 +101,30 @@ class Node:
                     self.instanceID += 1
                     self.routing_table = {}
                     for neighbor in self.neighbors.keys():
-                        self.network.send_message(self, neighbor, Message("DIO", {'rank': self.rank,
+                        self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
                                                                                   'instanceID': self.instanceID,
                                                                                   'routing_table': self.routing_table,
                                                                                   'ip_address': None,
                                                                                   'subnet': None,
-                                                                                  'prefix': None},
+                                                                                  'prefix': None,
+                                                                                  'grounded': self.grounded},
                                                                           self.node_id))
                     self.last_dodag = self.env.now
-                if self.env.now - self.last_ip > 10:
+                if self.env.now - self.last_ip > 40:
                     destination = '2001:3::1'
                     source = 'LBR'
                     #print(f"Sender id: {self.ip_routing_table[self.subnet_routing_table['2001:4::/20']]}")
-                    self.network.send_message(self, self.ip_routing_table[self.subnet_routing_table['2001:3::/20']], Message("IP", {'destination': destination,'source': source}, self.node_id))
+                    self.network.send_message(self, self.node_id,
+                                              Message("IP", {'destination': destination, 'source': source},
+                                                      self.node_id))
                     self.last_ip = self.env.now
             if self.node_id == 2:
-                if self.env.now - self.last_ip > 11:
+                if self.env.now - self.last_ip > 40:
                     destination = '2001::1'
                     source = '2001:4::1'
-                    self.network.send_message(self, self.parent, Message("IP", {'destination': destination,'source': source}, self.node_id))
+                    self.network.send_message(self, self.parent,
+                                              Message("IP", {'destination': destination, 'source': source},
+                                                      self.node_id))
                     self.last_ip = self.env.now
 
             # Process incoming messages
@@ -115,7 +139,16 @@ class Node:
                             if self.log:
                                 print(self.neighbors)
                     case "DIO":
-                        if message.payload['instanceID'] > self.instanceID:
+                        if message.payload['rank'] is None:
+                        if message.payload['instanceID'] > self.instanceID or (not self.grounded and message.payload['grounded']):
+                            if not self.grounded:
+                                if message.payload['grounded']:
+                                    self.isLBR = False
+                                    self.grounded = message.payload['grounded']
+                                    self.dis_count = 0
+                                    self.dis_interval = self.original_dis_interval
+
+
                             self.instanceID = message.payload['instanceID']
                             self.parent_candidates = {}
                             self.last_gr = 0
@@ -133,17 +166,16 @@ class Node:
                         if self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
                             # only add if it is not already on the list
 
-                            self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'],
-                                                                                                self.network.get_connection_metrics(
-                                                                                                    self.node_id,
-                                                                                                    message.sender_id))
-                            #self.routing_table = {}
+                            #self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], 1)
+                            self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
+
+
 
                             if self.isLBR:
                                 yield self.env.timeout(0.002)
                             else:
                                 yield self.env.timeout(0.02)
-                        yield self.env.timeout(0.002)
+                        yield self.env.timeout(0.02)
                     case "DAO":
 
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
@@ -153,7 +185,7 @@ class Node:
                                                       Message("DAO", {'routing_table': self.routing_table},
                                                               self.node_id))
                         if self.isLBR and len(self.routing_table) > 0:
-                                    self.update_ip_routing_table()
+                            self.update_ip_routing_table()
                         if self.isLBR:
                             yield self.env.timeout(0.002)
                         else:
@@ -163,7 +195,17 @@ class Node:
                         pass
 
                     case "DIS":  # Optional
-                        pass
+                        if self.grounded:
+                            self.network.send_message(self, message.sender_id, Message("DIO", {'DAGrank': self.DAGrank,
+                                                                                      'rank': self.rank,
+                                                                                      'instanceID': self.instanceID,
+                                                                                      'routing_table': self.routing_table,
+                                                                                      'ip_address': None,
+                                                                                      'subnet': None,
+                                                                                      'prefix': None,
+                                                                                      'grounded': self.grounded},
+                                                                              self.node_id))
+                        yield self.env.timeout(0.002)
 
                     case "HB":
                         self.neighbors[message.sender_id] = self.env.now
@@ -181,7 +223,8 @@ class Node:
                                                                                           'routing_table': self.routing_table,
                                                                                           'ip_address': None,
                                                                                           'subnet': None,
-                                                                                          'prefix': None},
+                                                                                          'prefix': None,
+                                                                                          'grounded': self.grounded},
                                                                                   self.node_id))
                             self.last_dodag = self.env.now
                         else:
@@ -196,31 +239,47 @@ class Node:
                         else:
                             yield self.env.timeout(0.02)
                     case "IP":
-                        print(f"Node {self.node_id} with Subnet: {self.subnet}")
-                        if self.ip_address == message.payload['destination']:
-                            print(f"Node {self.node_id} Received IP message from {message.payload['source']}")
-                        elif message.payload['destination'] in self.ip_routing_table.keys():
-                            for ip_address in self.ip_routing_table.keys() :
-                                if ip_address == message.payload['destination']:
-                                    self.network.send_message(self, self.ip_routing_table[ip_address],
-                                                              Message("IP", {'destination': message.payload['destination'],
-                                                                             'source': message.payload['source'],},
-                                                                             self.node_id))
-                        elif message.payload['destination'][0:len(self.subnet)] in self.subnet_routing_table.keys():
-                            print(f"Destination: {message.payload['destination']} Prefix length {len(self.subnet)}")
-                            for subnet in self.subnet_routing_table.keys():
-                                if subnet == message.payload['destination'][0:len(self.subnet)]:
-                                    self.network.send_message(self, self.ip_routing_table[self.subnet_routing_table[subnet]], 
-                                                              Message("IP", {'destination': message.payload['destination'],
-                                                                             'source': message.payload['source'],},
-                                                                             self.node_id))
-                        elif self.parent is not None:
-                            self.network.send_message(self, self.parent,
-                                                      Message("IP", {'destination': message.payload['destination'],
-                                                                             'source': message.payload['source'],},
-                                                                             self.node_id))
-                        else:
-                            print(f"Address {message.payload['destination']} not in network")
+                        if self.subnet is not None:
+                            if self.ip_address == message.payload['destination']:
+                                print(f"Node {self.node_id} Received IP message from {message.payload['source']}")
+                            elif message.payload['destination'] in self.ip_routing_table.keys():
+                                for ip_address in self.ip_routing_table.keys():
+                                    if ip_address == message.payload['destination']:
+                                        self.network.send_message(self, self.ip_routing_table[ip_address],
+                                                                  Message("IP",
+                                                                          {'destination': message.payload['destination'],
+                                                                           'source': message.payload['source'], },
+                                                                          self.node_id))
+                            elif message.payload['destination'][0:len(self.subnet)] in self.subnet_routing_table.keys():
+                                print(f"Destination: {message.payload['destination']} Prefix length {len(self.subnet)}")
+                                for subnet in self.subnet_routing_table.keys():
+                                    if subnet == message.payload['destination'][0:len(self.subnet)]:
+                                        self.network.send_message(self,
+                                                                  self.ip_routing_table[self.subnet_routing_table[subnet]],
+                                                                  Message("IP",
+                                                                          {'destination': message.payload['destination'],
+                                                                           'source': message.payload['source'], },
+                                                                          self.node_id))
+                            elif self.parent is not None:
+                                self.network.send_message(self, self.parent,
+                                                          Message("IP", {'destination': message.payload['destination'],
+                                                                         'source': message.payload['source'], },
+                                                                  self.node_id))
+                            else:
+                                print(f"Address {message.payload['destination']} not in network")
+
+
+            if not self.grounded and self.env.now - self.last_dis > self.dis_interval:
+                #multiply dis_interval by a random number between 1 and 2
+                self.dis_interval = self.dis_interval
+                self.dis_count += 1
+                for neighbor in self.neighbors.keys():
+                    self.network.send_message(self, neighbor, Message("DIS", None, self.node_id))
+                self.last_dis = self.env.now
+
+
+
+
 
             # Send heartbeat messages to neighbors
             if self.env.now - self.last_beat > self.heartbeat_interval:
@@ -248,8 +307,18 @@ class Node:
                                                                'instanceID': self.instanceID,
                                                                'ip_address': None,
                                                                'subnet': None,
-                                                               'prefix': None},
+                                                               'prefix': None,
+                                                               'grounded': self.grounded},
                                                               self.node_id))
+
+            if self.dis_count > 3 and not self.isLBR and self.parent is None:
+                self.isLBR = True
+                print(f"Node {self.node_id} is now LBR I am root!")
+                self.rank = 0
+                self.DAGrank = 0
+                self.dis_count = 0
+                self.parent = None
+                yield self.env.timeout(0.02)
 
             # Check if neighbors are still alive
             for node in list(self.neighbors.keys()):
@@ -286,7 +355,6 @@ class Node:
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
             yield self.env.timeout(0.1)
-
 
     def update_routing_table(self, routing_table, sender_id):
         keys_to_delete = []
