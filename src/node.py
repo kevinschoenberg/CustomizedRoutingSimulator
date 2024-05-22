@@ -42,6 +42,7 @@ class Node:
 
     def update_ip_routing_table(self):
         self.ip_routing_table = {}
+        self.subnet_routing_table = {}
         ip_address = None
         ip_prefix = None
         temp = 0
