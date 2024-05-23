@@ -45,6 +45,7 @@ class Node:
         self.ip_address = None
         self.subnet = None
         self.ip_prefix = None
+        self.received_DAO = False
 
     def update_ip_routing_table(self):
         self.ip_routing_table = {}
@@ -52,25 +53,27 @@ class Node:
         ip_address = None
         ip_prefix = None
         subnet = None
-        temp = None
+        ip_temp = 0
+        subnet_temp = 0
         if self.isLBR:
-            temp = self.node_id
+            ip_temp += 1
             self.subnet = '2001:'
-            self.ip_address = f'2001::{temp}'
+            self.ip_address = f'2001::{ip_temp}'
 
         for value in Counter(self.routing_table.values()).keys():
-            temp = value
+            ip_temp += 1
+            subnet_temp += 1
             if self.isLBR:
-                subnet = f'2001:{hex(temp)[2:]}'
-                ip_prefix = 16 + len(hex(temp)[2:]) * 4
-                ip_address = f'2001::{hex(temp)[2:]}'
+                subnet = f'2001:{hex(subnet_temp)[2:]}'
+                ip_prefix = 16 + len(hex(subnet_temp)[2:]) * 4
+                ip_address = f'2001::{hex(ip_temp)[2:]}'
             if not self.isLBR and self.ip_prefix is not None:
-                ip_address = f'{self.subnet}::{hex(temp)[2:]}'
+                ip_address = f'{self.subnet}::{hex(ip_temp)[2:]}'
                 if ((len(self.subnet) - (math.floor(len(self.subnet) / 5))) % 4 > 0):
-                    subnet = f'{self.subnet}{hex(temp)[2:]}'
+                    subnet = f'{self.subnet}{hex(subnet_temp)[2:]}'
                 else:
-                    subnet = f'{self.subnet}:{hex(temp)[2:]}'
-                ip_prefix = self.ip_prefix + len(hex(temp)[2:]) * 4
+                    subnet = f'{self.subnet}:{hex(subnet_temp)[2:]}'
+                ip_prefix = self.ip_prefix + len(hex(subnet_temp)[2:]) * 4
             if subnet is not None and self.rank is not None:
                 #Send DIO message to Node with id = value, informing them of their subnet
                 self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
@@ -81,9 +84,10 @@ class Node:
                 #Update the nodes ip routing table
                 self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
                 self.ip_routing_table[ip_address] = value
-
-        print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
-        print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
+        #if self.log:
+            #print(f"MAC: Node {self.node_id} routing table = {self.routing_table.items()}")
+            #print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
+            #print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
 
     def run(self):
         self.dis_interval *= random.uniform(1, 4)
@@ -152,19 +156,24 @@ class Node:
                             self.parent = None
                             self.rank = None
                             self.DAGrank = None
-
+                        
                         if message.payload['ip_address'] is not None:
                             self.ip_address = message.payload['ip_address']
                             self.subnet = message.payload['subnet']
                             self.ip_prefix = message.payload['prefix']
+                            #print(f"Node {self.node_id} routing table {self.routing_table.items()}")
                             if len(self.routing_table) > 0:
                                 self.update_ip_routing_table()
 
-                        if self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
+                        elif self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
                             # only add if it is not already on the list
 
+                            self.routing_table = {}
+                            self.ip_routing_table = {}
+                            self.subnet_routing_table = {}
                             #self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], 1)
-                            self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
+                            if message.payload['rank'] is not None:
+                                self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
 
 
 
@@ -172,9 +181,12 @@ class Node:
                                 yield self.env.timeout(0.002)
                             else:
                                 yield self.env.timeout(0.02)
+
                         yield self.env.timeout(0.02)
                     case "DAO":
-
+                        if message.sender_id in self.parent_candidates.keys():
+                            print(f"Node {self.node_id} deleting parent cadidate for node {message.sender_id}")
+                            del self.parent_candidates[message.sender_id]
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
                         if self.parent is not None:
@@ -182,9 +194,10 @@ class Node:
                                                       Message("DAO", {'routing_table': self.routing_table},
                                                               self.node_id))
                         if self.isLBR and len(self.routing_table) > 0:
-                            self.update_ip_routing_table()
+                            self.received_DAO = True
+                            #self.update_ip_routing_table()
                         if self.isLBR:
-                            yield self.env.timeout(0.002)
+                            yield self.env.timeout(0.004)
                         else:
                             yield self.env.timeout(0.002)
                     case "DAO-ACK":
@@ -225,11 +238,24 @@ class Node:
                                                                                   self.node_id))
                             self.last_dodag = self.env.now
                         else:
-                            if not message.payload['nr'] > self.last_gr:
+                            if message.payload['nr'] > self.last_gr:
+                                self.grounded = False
+                                self.routing_table = {}
+                                self.ip_routing_table = {}
+                                self.subnet_routing_table = {}
+                                self.parent = None
+                                self.parent_candidates = {}
+                                self.ip_address = None
+                                self.subnet = None
+                                self.ip_prefix = None
+                                #self.inbox = []
+                                self.rank = None
+                                self.DAGrank = None
+
                                 self.last_gr = message.payload['nr']
                                 for neighbor in self.neighbors.keys():
                                     self.network.send_message(self, neighbor,
-                                                              Message("GR", {'nr': message.payload['nr'] + 1},
+                                                              Message("GR", {'nr': message.payload['nr']},
                                                                       self.node_id))
                         if self.isLBR:
                             yield self.env.timeout(0.002)
@@ -274,8 +300,9 @@ class Node:
                     self.network.send_message(self, neighbor, Message("DIS", None, self.node_id))
                 self.last_dis = self.env.now
 
-
-
+            if self.received_DAO:
+                self.update_ip_routing_table()
+                self.received_DAO = False
 
 
             # Send heartbeat messages to neighbors
@@ -288,7 +315,7 @@ class Node:
             if not self.isLBR:
                 old_parent = self.parent
                 self.update_parent()
-                if old_parent != self.parent or old_parent is None:
+                if old_parent != self.parent or (old_parent is None and self.parent is not None):
                     # Send DAO message to parent, if a new one is selected
                     self.network.send_message(self, self.parent,
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
@@ -344,9 +371,20 @@ class Node:
                 self.parent = None
                 self.update_parent()
                 if self.parent is None:
+                    self.grounded = False
+                    self.routing_table = {}
+                    self.ip_routing_table = {}
+                    self.subnet_routing_table = {}
+                    self.parent_candidates = {}
+                    self.ip_address = None
+                    self.subnet = None
+                    self.ip_prefix = None
+                    #self.inbox = []
+                    self.rank = None
+                    self.DAGrank = None
                     print(f"Node {self.node_id} sending GR")
                     for neighbor in self.neighbors.keys():
-                        self.network.send_message(self, neighbor, Message("GR", {'nr': 0}, self.node_id))
+                        self.network.send_message(self, neighbor, Message("GR", {'nr': self.last_gr + 1}, self.node_id))
                 else:
                     self.network.send_message(self, self.parent,
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
@@ -366,6 +404,8 @@ class Node:
             self.routing_table[key] = sender_id
 
         self.routing_table[sender_id] = sender_id
+        #if self.log:
+            #print(f"Node {self.node_id} routing table: {self.routing_table.items()}")
 
     @staticmethod
     def objective_function(parent_rank, rank_step):

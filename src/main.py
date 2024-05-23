@@ -9,7 +9,7 @@ from node import Node
 from connection import Connection
 from message import Message
 
-NUM_NODES = 10
+NUM_NODES = 20
 AREA_X = 5
 AREA_Y = 5
 PLOT_INTERVAL = 0.2
@@ -23,7 +23,7 @@ def main():
     env = simpy.Environment()
     network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL)
 
-    env.run(until=160)
+    env.run(until=240)
 
     # print the parent candidates fo each node
     for node in network.nodes:
@@ -33,6 +33,10 @@ def main():
     for node in network.nodes:
         #if node.isLBR:
         print(node.name + ' routing table: ' + str(node.routing_table))
+        print('-----------------------------------')
+        print(node.name + ' ip routing table: ' + str(node.ip_routing_table))
+        print('-----------------------------------')
+        print(node.name + ' subnet routing table: ' + str(node.subnet_routing_table))
         print('-----------------------------------')
     plt.show()
 
