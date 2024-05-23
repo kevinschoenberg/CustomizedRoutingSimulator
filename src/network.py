@@ -166,7 +166,7 @@ class Network:
         for i in range(self.number_of_nodes):
             is_lbr = False
             log = False
-            log_nodes = [2]
+            log_nodes = []
             name = 'Node{}'.format(i)
 
             #position = get_ith_node_position(n, i + 1)

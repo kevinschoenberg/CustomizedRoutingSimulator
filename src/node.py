@@ -136,12 +136,10 @@ class Node:
                     case "ND":
                         self.network.send_message(self, message.sender_id, Message("ACK", None, self.node_id))
                         if message.sender_id not in self.neighbors.keys():
-                            self.neighbors[message.sender_id] = self.env.now
+                            self.network.send_message(self, message.sender_id, Message("ND", None, self.node_id))
                     case "ACK":
                         self.neighbors[message.sender_id] = self.env.now
                     case "DIO":
-                        #if self.log:
-                            #print(f"Node {self.node_id} with DAGrank {self.DAGrank} DIO sendor node {message.sender_id} with DAGrank {self.network.get_node(message.sender_id).DAGrank}")
                         if message.payload['instanceID'] > self.instanceID or (not self.grounded and message.payload['grounded']):
                             if not self.grounded:
                                 if message.payload['grounded']:
@@ -162,59 +160,49 @@ class Node:
                             self.ip_address = message.payload['ip_address']
                             self.subnet = message.payload['subnet']
                             self.ip_prefix = message.payload['prefix']
-                            #if self.log:
-                                #print(f"Node {self.node_id} routing table {self.routing_table.items()}")
+
                             if len(self.routing_table) > 0:
                                 self.update_ip_routing_table()
 
                         elif self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
                             # only add if it is not already on the list
-                            for node in self.routing_table.keys():
-                                self.network.send_message(self, message.sender_id, Message("DAO-ACK", {'isParent': False,}, self.node_id))
+                            if message.payload['rank'] is not None:
+                                self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
+                                #if self.rank is None or self.parent_candidates[message.sender_id] < self.rank:
+                                    #self.routing_table = {}
+                                    #self.ip_routing_table = {}
+                                    #self.subnet_routing_table = {}
+                            if self.log:
+                                print(f"1: Node {self.node_id} is resetting with current routing table: {self.routing_table.items()}")
                             self.routing_table = {}
                             self.ip_routing_table = {}
                             self.subnet_routing_table = {}
-                            #self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], 1)
-                            if message.payload['rank'] is not None:
-                                self.parent_candidates[message.sender_id] = self.objective_function(message.payload['rank'], self.network.get_connection_metrics(self.node_id, message.sender_id))
-
-
                             if self.isLBR:
                                 yield self.env.timeout(0.002)
                             else:
                                 yield self.env.timeout(0.02)
 
                         yield self.env.timeout(0.02)
-                    case "DAO":
-                        self.network.send_message(self, message.sender_id,
-                                                      Message("DAO-ACK",
-                                                              {'isParent': True,},
-                                                              self.node_id))
-                        
+                    case "DAO":                        
                         if message.sender_id in self.parent_candidates.keys():
                             del self.parent_candidates[message.sender_id]
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
                         if self.parent is not None:
+                            if self.log:
+                                print(f"14: Node {self.node_id} sending DAO to parent {self.parent}")
                             self.network.send_message(self, self.parent,
                                                       Message("DAO", {'routing_table': self.routing_table},
                                                               self.node_id))
                         if self.isLBR and len(self.routing_table) > 0:
                             self.received_DAO = True
-                            #self.update_ip_routing_table()
+
                         if self.isLBR:
                             yield self.env.timeout(0.004)
                         else:
                             yield self.env.timeout(0.002)
                     case "DAO-ACK":
-                        if message.payload['isParent']:
-                            self.parent = message.sender_id
-
-                        else:
-                            self.parent = None
-                            #self.update_parent()
-                            #self.network.send_message(self, self.parent,
-                            #                  Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+                        pass
 
                     case "DIS":  # Optional
                         if self.grounded:
@@ -231,12 +219,18 @@ class Node:
 
                     case "HB":
                         self.neighbors[message.sender_id] = self.env.now
+                        #if message.sender_id in self.routing_table.keys():
+                        if message.sender_id == self.parent:
+                            if self.log:
+                                print(f"10: Node {self.node_id} sending DAO to parent {self.parent}")
+                            self.network.send_message(self, self.parent, Message("DAO", {'routing_table': self.routing_table},
+                                                              self.node_id))
 
                     case "GR":
                         if self.isLBR:
                             self.instanceID += 1
                             if self.log:
-                                print(f"Node {self.node_id} is sending DIO")
+                                print(f"2: Node {self.node_id} is resetting with current routing table: {self.routing_table.items()}")
                             self.routing_table = {}
                             for neighbor in self.neighbors.keys():
                                 self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank,
@@ -252,6 +246,8 @@ class Node:
                         else:
                             if message.payload['nr'] > self.last_gr:
                                 self.grounded = False
+                                if self.log:
+                                    print(f"3: Node {self.node_id} is resetting with current routing table: {self.routing_table.items()}")
                                 self.routing_table = {}
                                 self.ip_routing_table = {}
                                 self.subnet_routing_table = {}
@@ -260,7 +256,6 @@ class Node:
                                 self.ip_address = None
                                 self.subnet = None
                                 self.ip_prefix = None
-                                #self.inbox = []
                                 self.rank = None
                                 self.DAGrank = None
 
@@ -316,7 +311,6 @@ class Node:
                 self.update_ip_routing_table()
                 self.received_DAO = False
 
-
             # Send heartbeat messages to neighbors
             if self.env.now - self.last_beat > self.heartbeat_interval:
                 for neighbor in self.neighbors.keys():
@@ -329,6 +323,9 @@ class Node:
                 self.update_parent()
                 if old_parent != self.parent or (old_parent is None and self.parent is not None):
                     # Send DAO message to parent, if a new one is selected
+                    if self.log:
+                        print(f"11: Node {self.node_id}, old parent: {old_parent} new parent {self.parent}")
+                        print(f"11: Node {self.node_id} sending DAO to parent {self.parent}")
                     self.network.send_message(self, self.parent,
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
@@ -372,6 +369,8 @@ class Node:
                         self.routing_table.pop(key)
 
                     if self.parent is not None:
+                        if self.log:
+                            print(f"12: Node {self.node_id} sending DAO to parent {self.parent}")
                         self.network.send_message(self, self.parent,
                                                   Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
@@ -380,10 +379,17 @@ class Node:
 
             # Check if parent is still alive
             if self.parent not in self.neighbors.keys() and self.parent is not None:
+                if self.log:
+                    print(f"13: Node {self.node_id} is updating parent, current parent {self.parent}, parent candidates: {self.parent_candidates.items()}")
                 self.parent = None
                 self.update_parent()
+                if self.log:
+                    print(f"14: Node {self.node_id} has updated parent, current parent {self.parent}, parent candidates: {self.parent_candidates.items()}")
+                
                 if self.parent is None:
                     self.grounded = False
+                    if self.log:
+                        print(f"4: Node {self.node_id} is resetting with current routing table: {self.routing_table.items()}")
                     self.routing_table = {}
                     self.ip_routing_table = {}
                     self.subnet_routing_table = {}
@@ -391,13 +397,14 @@ class Node:
                     self.ip_address = None
                     self.subnet = None
                     self.ip_prefix = None
-                    #self.inbox = []
                     self.rank = None
                     self.DAGrank = None
                     print(f"Node {self.node_id} sending GR")
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("GR", {'nr': self.last_gr + 1}, self.node_id))
                 else:
+                    if self.log:
+                        print(f"13: Node {self.node_id} sending DAO to parent {self.parent}")
                     self.network.send_message(self, self.parent,
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
@@ -416,8 +423,6 @@ class Node:
             self.routing_table[key] = sender_id
 
         self.routing_table[sender_id] = sender_id
-        #if self.log:
-            #print(f"Node {self.node_id} routing table: {self.routing_table.items()}")
 
     @staticmethod
     def objective_function(parent_rank, rank_step):

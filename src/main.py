@@ -12,7 +12,7 @@ from message import Message
 NUM_NODES = 20
 AREA_X = 5
 AREA_Y = 5
-PLOT_INTERVAL = 1
+PLOT_INTERVAL = 5
 
 HEARTBEAT_INTERVAL = 20
 
@@ -23,7 +23,7 @@ def main():
     env = simpy.Environment()
     network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL)
 
-    env.run(until=200)
+    env.run(until=350)
 
     # print the parent candidates fo each node
     for node in network.nodes:
