@@ -84,10 +84,10 @@ class Node:
                 #Update the nodes ip routing table
                 self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
                 self.ip_routing_table[ip_address] = value
-        #if self.log:
-            #print(f"MAC: Node {self.node_id} routing table = {self.routing_table.items()}")
-            #print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
-            #print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
+        if self.log:
+            print(f"MAC: Node {self.node_id} routing table = {self.routing_table.items()}")
+            print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
+            print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
 
     def run(self):
         self.dis_interval *= random.uniform(1, 4)
@@ -141,6 +141,8 @@ class Node:
                             if self.log:
                                 print(self.neighbors)
                     case "DIO":
+                        if self.log:
+                                print(f"Node {self.node_id} with DAGrank {self.DAGrank} DIO sendor node {message.sender_id} with DAGrank {self.network.get_node(message.sender_id).DAGrank}")
                         if message.payload['instanceID'] > self.instanceID or (not self.grounded and message.payload['grounded']):
                             if not self.grounded:
                                 if message.payload['grounded']:
@@ -161,13 +163,17 @@ class Node:
                             self.ip_address = message.payload['ip_address']
                             self.subnet = message.payload['subnet']
                             self.ip_prefix = message.payload['prefix']
-                            #print(f"Node {self.node_id} routing table {self.routing_table.items()}")
+                            if self.log:
+                                print(f"Node {self.node_id} routing table {self.routing_table.items()}")
                             if len(self.routing_table) > 0:
                                 self.update_ip_routing_table()
 
                         elif self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
                             # only add if it is not already on the list
-
+                            for node in self.routing_table.keys():
+                                self.network.send_message(self, node,
+                                                      Message("DAO-ACK", {'isParent': False},
+                                                              self.node_id))
                             self.routing_table = {}
                             self.ip_routing_table = {}
                             self.subnet_routing_table = {}
@@ -184,8 +190,10 @@ class Node:
 
                         yield self.env.timeout(0.02)
                     case "DAO":
+                        self.network.send_message(self, message.sender_id,
+                                                      Message("DAO-ACK", {'isParent': True},
+                                                              self.node_id))
                         if message.sender_id in self.parent_candidates.keys():
-                            print(f"Node {self.node_id} deleting parent cadidate for node {message.sender_id}")
                             del self.parent_candidates[message.sender_id]
                         self.update_routing_table(message.payload['routing_table'], message.sender_id)
 
@@ -200,9 +208,13 @@ class Node:
                             yield self.env.timeout(0.004)
                         else:
                             yield self.env.timeout(0.002)
+                        if self.log and message.sender_id == 21:
+                                print(f"11: Node {self.node_id} routing table {self.routing_table.items()}")
                     case "DAO-ACK":
-                        # If approoved
-                        pass
+                        if message.payload['isParent']:
+                            self.parent = message.sender_id
+                        else:
+                            self.parent = None
 
                     case "DIS":  # Optional
                         if self.grounded:

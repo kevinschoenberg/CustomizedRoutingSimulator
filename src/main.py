@@ -9,9 +9,9 @@ from node import Node
 from connection import Connection
 from message import Message
 
-NUM_NODES = 20
-AREA_X = 5
-AREA_Y = 5
+NUM_NODES = 50
+AREA_X = 6
+AREA_Y = 6
 PLOT_INTERVAL = 0.2
 
 HEARTBEAT_INTERVAL = 20
