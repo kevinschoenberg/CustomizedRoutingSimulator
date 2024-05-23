@@ -169,8 +169,8 @@ class Node:
 
                         elif self.DAGrank is None or self.DAGrank >= message.payload['DAGrank']:
                             # only add if it is not already on the list
-                            #for node in self.routing_table.keys():
-                                #self.network.send_message(self, message.sender_id, Message("DAO-ACK", {'isParent': False,}, self.node_id))
+                            for node in self.routing_table.keys():
+                                self.network.send_message(self, message.sender_id, Message("DAO-ACK", {'isParent': False,}, self.node_id))
                             self.routing_table = {}
                             self.ip_routing_table = {}
                             self.subnet_routing_table = {}
@@ -212,9 +212,9 @@ class Node:
 
                         else:
                             self.parent = None
-                            self.update_parent()
-                            self.network.send_message(self, self.parent,
-                                              Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+                            #self.update_parent()
+                            #self.network.send_message(self, self.parent,
+                            #                  Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
                     case "DIS":  # Optional
                         if self.grounded:
