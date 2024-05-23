@@ -47,9 +47,9 @@ class Network:
 
 
             if self.env.now > 80 and self.remove2:
-                self.add_node(Node(self.env, 'Node{}'.format(1), (3.5, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
+                self.add_node(Node(self.env, 'Node{}'.format(len(self.nodes)), (3.5, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
                 self.add_node(
-                    Node(self.env, 'Node{}'.format(1), (3, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval,
+                    Node(self.env, 'Node{}'.format(len(self.nodes)), (3, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval,
                          self.dis_interval, is_lbr=False, log=False))
                 self.remove2 = False
                 self.generate_connections()
@@ -166,7 +166,7 @@ class Network:
         for i in range(self.number_of_nodes):
             is_lbr = False
             log = False
-            log_nodes = []
+            log_nodes = [2]
             name = 'Node{}'.format(i)
 
             #position = get_ith_node_position(n, i + 1)

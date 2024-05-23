@@ -9,10 +9,10 @@ from node import Node
 from connection import Connection
 from message import Message
 
-NUM_NODES = 50
-AREA_X = 6
-AREA_Y = 6
-PLOT_INTERVAL = 0.2
+NUM_NODES = 20
+AREA_X = 5
+AREA_Y = 5
+PLOT_INTERVAL = 1
 
 HEARTBEAT_INTERVAL = 20
 
@@ -23,7 +23,7 @@ def main():
     env = simpy.Environment()
     network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL)
 
-    env.run(until=240)
+    env.run(until=200)
 
     # print the parent candidates fo each node
     for node in network.nodes:
