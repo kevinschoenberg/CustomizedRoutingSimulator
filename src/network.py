@@ -1,6 +1,9 @@
+import time
+
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import random
+import os
 from matplotlib.animation import FuncAnimation
 
 from connection import Connection
@@ -11,7 +14,7 @@ from node import Node
 random.seed(0)
 
 class Network:
-    def __init__(self, env, number_of_nodes, area_x, area_y, heartbeat_interval, plot_interval, dis_interval):
+    def __init__(self, env, number_of_nodes, area_x, area_y, heartbeat_interval, plot_interval, dis_interval, plot_times):
         self.env = env
         self.number_of_nodes = number_of_nodes
         self.area_x = area_x
@@ -19,6 +22,7 @@ class Network:
         self.plot_interval = plot_interval
         self.heartbeat_interval = heartbeat_interval
         self.dis_interval = dis_interval
+        self.plot_times = plot_times
 
         self.nodes = []
         self.connections = []
@@ -83,14 +87,19 @@ class Network:
             self.plot_count += 1
             for node in self.nodes:
                 # Write the node ID and rank on the plot with some separation
+
+                #ID
                 self.ax.text(node.position[0] + 0.2, node.position[1], f"{node.node_id}", fontsize=12, color='blue',
                              weight='bold', zorder=2)
-                self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12,
-                             color='green',
-                             weight='bold', zorder=2)
-                self.ax.text(node.position[0], node.position[1] - 0.2, f"{node.ip_address}", fontsize=12, color='black',)
-                if node.log:
 
+                #DAGrank
+                #self.ax.text(node.position[0] - 0.2, node.position[1], f"{node.DAGrank}", fontsize=12,color='green',weight='bold', zorder=2)
+
+                #IP
+                #self.ax.text(node.position[0], node.position[1] - 0.2, f"{node.ip_address}", fontsize=12, color='black',)
+
+                #Rank
+                if node.log:
                     if node.rank is not None:
                         self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank:.2f}", fontsize=12, color='red',
                                 weight='bold', zorder=2)
@@ -98,6 +107,7 @@ class Network:
                         self.ax.text(node.position[0], node.position[1] + 0.2, f"{node.rank}", fontsize=12, color='red',
                                 weight='bold', zorder=2)
 
+                #Node color
                 if node.alive:
                     if node.isLBR:
                         self.ax.plot(node.position[0], node.position[1], 'go')  # Plot node position
@@ -110,20 +120,27 @@ class Network:
                 if node.log:
                     self.ax.add_patch(plt.Circle((node.position[0], node.position[1]), node.range, color='gray', fill=False, zorder=1))
 
-
-                for neighbor_id in node.neighbors:
-                    for node2 in self.nodes:
-                        if node2.node_id == neighbor_id:
-                            # self.ax.plot([node.position[0], node2.position[0]], [node.position[1], node2.position[1]], 'r-', zorder=1)  # Line between neighbors
-                            pass
-            # draw an arrow from each node to their parent
+            #Parents
             for node in self.nodes:
                 if node.alive and node.parent is not None:
                     for parent in self.nodes:
                         if parent.node_id == node.parent:
-                            self.ax.arrow(node.position[0], node.position[1], 0.9 * (parent.position[0] - node.position[0]),
-                                        0.9 * (parent.position[1] - node.position[1]), head_width=0.05, head_length=0.05,
-                                        fc='k', ec='k', zorder=3)
+                            #unit vector
+                            unit_vector = [(parent.position[0] - node.position[0]) / self.distance(node, parent),
+                                           (parent.position[1] - node.position[1]) / self.distance(node, parent)]
+                            #end point
+                            end_point = [parent.position[0] - unit_vector[0] * 0.1, parent.position[1] - unit_vector[1] * 0.1]
+                            self.ax.arrow(node.position[0], node.position[1], end_point[0] - node.position[0], end_point[1] - node.position[1], head_width=0.05, head_length=0.05, fc='black', ec='black', zorder=3)
+
+            #Connections
+            for connection in self.connections:
+                if connection.node1.node_id < connection.node2.node_id:
+                    if connection.node1.alive and connection.node2.alive:
+                        self.ax.plot([connection.node1.position[0], connection.node2.position[0]],
+                                [connection.node1.position[1], connection.node2.position[1]], 'r--', zorder=1, alpha=0.5, linewidth=1)
+                        self.ax.text((connection.node1.position[0] + connection.node2.position[0]) / 2,
+                                (connection.node1.position[1] + connection.node2.position[1]) / 2,
+                                f"{connection.ETX:.2f}", fontsize=9, color='purple', zorder=4)
 
             self.ax.set_xlabel('X')
             self.ax.set_ylabel('Y')
@@ -140,6 +157,14 @@ class Network:
             #plt.ylim(8, 11)
             self.ax.set_aspect('equal')
             plt.draw()
+            #create folder
+
+            if not os.path.exists('plots'):
+                os.makedirs('plots')
+
+            if int(self.plot_count * self.plot_interval) in self.plot_times:
+                print(f"Saving plot at time {self.plot_count * self.plot_interval:.2f}")
+                plt.savefig(f"plots/plot_{self.plot_count} {time.time()}.png")
             plt.pause(0.01)
 
     def generate_nodes(self, heartbeat_interval ,dis_interval):

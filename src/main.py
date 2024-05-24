@@ -9,19 +9,21 @@ from node import Node
 from connection import Connection
 from message import Message
 
-NUM_NODES = 20
-AREA_X = 5
-AREA_Y = 5
-PLOT_INTERVAL = 5
+NUM_NODES = 10
+AREA_X = 3
+AREA_Y = 3
+PLOT_INTERVAL = 1
 
 HEARTBEAT_INTERVAL = 20
 
 DIS_INTERVAL = 5
 
+PLOT_TIMES = [10]
+
 
 def main():
     env = simpy.Environment()
-    network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL)
+    network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL, PLOT_TIMES)
 
     env.run(until=200)
 
