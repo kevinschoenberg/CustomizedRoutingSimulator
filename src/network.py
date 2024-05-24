@@ -214,7 +214,6 @@ class Network:
                     distance = self.distance(node1, node2)
                     exponent = (distance ** 3) - 1
                     etx = 3 ** exponent + 0.67
-                    print(etx)
                     connection = Connection(node1, node2, etx=etx)
                     if connection not in self.connections:
                         self.add_connection(connection)
