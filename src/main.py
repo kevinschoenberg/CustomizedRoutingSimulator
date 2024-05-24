@@ -23,7 +23,7 @@ def main():
     env = simpy.Environment()
     network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL)
 
-    env.run(until=350)
+    env.run(until=200)
 
     # print the parent candidates fo each node
     for node in network.nodes:
