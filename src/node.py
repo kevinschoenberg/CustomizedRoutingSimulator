@@ -72,17 +72,22 @@ class Node:
                                                                                   'grounded': self.grounded},
                                                                           self.node_id))
                     self.last_dodag = self.env.now
-                if self.env.now - self.last_ip > 40:
-                    destination = '2001:3::1'
-                    source = 'LBR'
-                    self.network.send_message(self, self.node_id,
+            if self.node_id == 6 and False:
+                if self.env.now - self.last_ip > 50:
+                    destination_node = 1
+                    destination = self.network.get_node(destination_node).ip_address
+                    source = self.ip_address
+                    print(f"Node {self.node_id} with IP-address {self.ip_address} sending IP message to parent node {self.parent} with IP-address {destination}")
+                    self.network.send_message(self, self.parent,
                                               Message("IP", {'destination': destination, 'source': source},
                                                       self.node_id))
                     self.last_ip = self.env.now
-            if self.node_id == 2:
-                if self.env.now - self.last_ip > 40:
-                    destination = '2001::1'
+            if self.node_id == 1 and False:
+                if self.env.now - self.last_ip > 50:
+                    destination_node = 6
+                    destination = self.network.get_node(destination_node).ip_address
                     source = self.ip_address
+                    print(f"Node {self.node_id} with IP-address {self.ip_address} sending IP message to parent node {self.parent} with IP-address {destination}")
                     self.network.send_message(self, self.parent, Message("IP", {'destination': destination,'source': source}, self.node_id))
                     self.last_ip = self.env.now
 
@@ -217,9 +222,11 @@ class Node:
                             yield self.env.timeout(0.02)
                     case "IP":
                         if self.subnet is not None:
+                            #print(f"Node {self.node_id} message.payload['destination'][0:len(self.subnet)+1] = {message.payload['destination'][0:len(self.subnet)+1]}, self.subnet_routing_table.keys() = {self.subnet_routing_table.keys()}")
                             if self.ip_address == message.payload['destination']:
-                                print(f"Node {self.node_id} Received IP message from {message.payload['source']}")
+                                print(f"Node {self.node_id} Received IP message from node {message.sender_id} with source {message.payload['source']}")
                             elif message.payload['destination'] in self.ip_routing_table.keys():
+                                print(f"Node {self.node_id} sending IP message from node {message.sender_id} to {message.payload['destination']}")
                                 for ip_address in self.ip_routing_table.keys():
                                     if ip_address == message.payload['destination']:
                                         self.network.send_message(self, self.ip_routing_table[ip_address],
@@ -227,10 +234,10 @@ class Node:
                                                                           {'destination': message.payload['destination'],
                                                                            'source': message.payload['source'], },
                                                                           self.node_id))
-                            elif message.payload['destination'][0:len(self.subnet)] in self.subnet_routing_table.keys():
-                                print(f"Destination: {message.payload['destination']} Prefix length {len(self.subnet)}")
+                            elif message.payload['destination'][0:len(self.subnet)+1] in self.subnet_routing_table.keys():
                                 for subnet in self.subnet_routing_table.keys():
-                                    if subnet == message.payload['destination'][0:len(self.subnet)]:
+                                    if subnet == message.payload['destination'][0:len(self.subnet)+1]:
+                                        print(f"Node {self.node_id} forwarding IP message from node {message.sender_id} to Node {self.ip_routing_table[self.subnet_routing_table[subnet]]}")
                                         self.network.send_message(self,
                                                                   self.ip_routing_table[self.subnet_routing_table[subnet]],
                                                                   Message("IP",
@@ -238,6 +245,7 @@ class Node:
                                                                            'source': message.payload['source'], },
                                                                           self.node_id))
                             elif self.parent is not None:
+                                print(f"Node {self.node_id} forwarding IP message from node {message.sender_id} to parent node {self.parent}")
                                 self.network.send_message(self, self.parent,
                                                           Message("IP", {'destination': message.payload['destination'],
                                                                          'source': message.payload['source'], },
@@ -363,26 +371,24 @@ class Node:
         ip_prefix = None
         subnet = None
         ip_temp = 0
-        subnet_temp = 0
         if self.isLBR:
             ip_temp += 1
             self.subnet = '2001:'
             self.ip_address = f'2001::{ip_temp}'
 
-        for value in Counter(self.routing_table.values()).keys():
+        for value in sorted(Counter(self.routing_table.values()).keys()):
             ip_temp += 1
-            subnet_temp += 1
             if self.isLBR:
-                subnet = f'2001:{hex(subnet_temp)[2:]}'
-                ip_prefix = 16 + len(hex(subnet_temp)[2:]) * 4
+                subnet = f'2001:{hex(ip_temp)[2:]}'
+                ip_prefix = 16 + len(hex(ip_temp)[2:]) * 4
                 ip_address = f'2001::{hex(ip_temp)[2:]}'
             if not self.isLBR and self.ip_prefix is not None:
                 ip_address = f'{self.subnet}::{hex(ip_temp)[2:]}'
                 if ((len(self.subnet) - (math.floor(len(self.subnet) / 5))) % 4 > 0):
-                    subnet = f'{self.subnet}{hex(subnet_temp)[2:]}'
+                    subnet = f'{self.subnet}{hex(ip_temp)[2:]}'
                 else:
-                    subnet = f'{self.subnet}:{hex(subnet_temp)[2:]}'
-                ip_prefix = self.ip_prefix + len(hex(subnet_temp)[2:]) * 4
+                    subnet = f'{self.subnet}:{hex(ip_temp)[2:]}'
+                ip_prefix = self.ip_prefix + len(hex(ip_temp)[2:]) * 4
             if subnet is not None and self.rank is not None:
                 #Send DIO message to Node with id = value, informing them of their subnet
                 self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
@@ -391,7 +397,7 @@ class Node:
                                                                        'ip_address': ip_address, 'prefix': ip_prefix, 'grounded': self.grounded},
                                                                self.node_id))
                 #Update the nodes ip routing table
-                self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
+                self.subnet_routing_table[f'{subnet}'] = ip_address
                 self.ip_routing_table[ip_address] = value
 
     @staticmethod
