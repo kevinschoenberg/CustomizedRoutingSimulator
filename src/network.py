@@ -206,7 +206,7 @@ class Network:
                 connection.node2.inbox.append(message)
 
     def send_message(self, sender, node_id, message):
-        [node.inbox.append(message) for node in self.nodes if node.node_id == node_id and self.in_range(sender, node)]
+        [node.inbox.append(message) for node in self.nodes if node.node_id == node_id and self.has_connection(sender, node)]
 
     def in_range(self, node1, node2):
         return self.distance(node1, node2) <= node1.range
@@ -220,4 +220,9 @@ class Network:
             if connection.node1.node_id == node1 and connection.node2.node_id == node2:
                 return connection.ETX
 
+    def has_connection(self, node1, node2):
+        for connection in self.connections:
+            if (connection.node1 == node1 and connection.node2 == node2):
+                return True
+        return False
 
