@@ -214,7 +214,10 @@ class Network:
         for node1 in self.nodes:
             for node2 in self.nodes:
                 if node1 != node2 and self.in_range(node1, node2):
-                    etx = (self.distance(node1, node2)/1.3+1)**4
+                    distance = self.distance(node1, node2)
+                    exponent = (distance ** 3) - 1
+                    etx = 3 ** exponent + 0.67
+                    print(etx)
                     connection = Connection(node1, node2, etx=etx)
                     if connection not in self.connections:
                         self.add_connection(connection)

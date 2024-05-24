@@ -18,7 +18,7 @@ HEARTBEAT_INTERVAL = 20
 
 DIS_INTERVAL = 5
 
-PLOT_TIMES = [10]
+PLOT_TIMES = [90]
 
 
 def main():
