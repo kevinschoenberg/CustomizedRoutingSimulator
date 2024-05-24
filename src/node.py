@@ -44,7 +44,6 @@ class Node:
         self.subnet_routing_table = {}
         self.ip_address = None
         self.subnet = None
-        self.ip_prefix = None
         self.received_DAO = False
 
     def run(self):
@@ -68,7 +67,6 @@ class Node:
                                                                                   'routing_table': self.routing_table,
                                                                                   'ip_address': None,
                                                                                   'subnet': None,
-                                                                                  'prefix': None,
                                                                                   'grounded': self.grounded},
                                                                           self.node_id))
                     self.last_dodag = self.env.now
@@ -121,7 +119,6 @@ class Node:
                         if message.payload['ip_address'] is not None:
                             self.ip_address = message.payload['ip_address']
                             self.subnet = message.payload['subnet']
-                            self.ip_prefix = message.payload['prefix']
 
                             if len(self.routing_table) > 0:
                                 self.update_ip_routing_table()
@@ -167,7 +164,6 @@ class Node:
                                                                                       'routing_table': self.routing_table,
                                                                                       'ip_address': None,
                                                                                       'subnet': None,
-                                                                                      'prefix': None,
                                                                                       'grounded': self.grounded},
                                                                               self.node_id))
                         yield self.env.timeout(0.002)
@@ -185,7 +181,6 @@ class Node:
                             self.parent_candidates = {}
                             self.ip_address = None
                             self.subnet = None
-                            self.ip_prefix = None
                             for neighbor in self.neighbors.keys():
                                 self.network.send_message(self, neighbor, Message("DIO", {'DAGrank': self.DAGrank,
                                                                                           'rank': self.rank,
@@ -193,7 +188,6 @@ class Node:
                                                                                           'routing_table': self.routing_table,
                                                                                           'ip_address': None,
                                                                                           'subnet': None,
-                                                                                          'prefix': None,
                                                                                           'grounded': self.grounded},
                                                                                   self.node_id))
                             self.last_dodag = self.env.now
@@ -207,7 +201,6 @@ class Node:
                                 self.parent_candidates = {}
                                 self.ip_address = None
                                 self.subnet = None
-                                self.ip_prefix = None
                                 self.rank = None
                                 self.DAGrank = None
 
@@ -300,7 +293,6 @@ class Node:
                                                                'instanceID': self.instanceID,
                                                                'ip_address': None,
                                                                'subnet': None,
-                                                               'prefix': None,
                                                                'grounded': self.grounded},
                                                               self.node_id))
 
@@ -338,7 +330,6 @@ class Node:
                     self.parent_candidates = {}
                     self.ip_address = None
                     self.subnet = None
-                    self.ip_prefix = None
                     self.inbox = []
                     self.rank = None
                     self.DAGrank = None
@@ -368,7 +359,6 @@ class Node:
         self.ip_routing_table = {}
         self.subnet_routing_table = {}
         ip_address = None
-        ip_prefix = None
         subnet = None
         ip_temp = 0
         if self.isLBR:
@@ -380,21 +370,19 @@ class Node:
             ip_temp += 1
             if self.isLBR:
                 subnet = f'2001:{hex(ip_temp)[2:]}'
-                ip_prefix = 16 + len(hex(ip_temp)[2:]) * 4
                 ip_address = f'2001::{hex(ip_temp)[2:]}'
-            if not self.isLBR and self.ip_prefix is not None:
+            if not self.isLBR and self.subnet is not None:
                 ip_address = f'{self.subnet}::{hex(ip_temp)[2:]}'
                 if ((len(self.subnet) - (math.floor(len(self.subnet) / 5))) % 4 > 0):
                     subnet = f'{self.subnet}{hex(ip_temp)[2:]}'
                 else:
                     subnet = f'{self.subnet}:{hex(ip_temp)[2:]}'
-                ip_prefix = self.ip_prefix + len(hex(ip_temp)[2:]) * 4
             if subnet is not None and self.rank is not None:
                 #Send DIO message to Node with id = value, informing them of their subnet
                 self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
                                                                        'routing_table': self.routing_table,
                                                                        'instanceID': self.instanceID, 'subnet': subnet,
-                                                                       'ip_address': ip_address, 'prefix': ip_prefix, 'grounded': self.grounded},
+                                                                       'ip_address': ip_address, 'grounded': self.grounded},
                                                                self.node_id))
                 #Update the nodes ip routing table
                 self.subnet_routing_table[f'{subnet}'] = ip_address
