@@ -263,8 +263,9 @@ class Node:
                 for neighbor in self.neighbors.keys():
                     self.network.send_message(self, neighbor, Message("HB", None, self.node_id))
                 #Send a DAO to parent to inform them they are still their child
-                self.network.send_message(self, self.parent,
-                                        Message("DAO", {'routing_table': self.routing_table}, self.node_id))
+                if self.parent is not None:
+                    self.network.send_message(self, self.parent,
+                                            Message("DAO", {'routing_table': self.routing_table}, self.node_id))
                 self.last_beat = self.env.now
 
             # Check if the parent should be updated (LBR has no parent)
@@ -301,21 +302,13 @@ class Node:
                 self.rank = 0
                 self.DAGrank = 0
                 self.dis_count = 0
-                self.parent = None
                 yield self.env.timeout(0.02)
 
             # Check if neighbors are still alive
             for node in list(self.neighbors.keys()):
                 if self.env.now - self.neighbors[node] > self.heartbeat_interval * 2:
                     del self.neighbors[node]
-
-                    keys_to_delete = []
-                    for key, value in self.routing_table.items():
-                        if value == node or key == node:
-                            keys_to_delete.append(key)
-
-                    for key in keys_to_delete:
-                        self.routing_table.pop(key)
+                    self.update_routing_table(None, node, True)
 
                     if self.parent is not None:
                        self.network.send_message(self, self.parent,
@@ -325,7 +318,7 @@ class Node:
                         del self.parent_candidates[node]
 
             # Check if parent is still alive
-            if self.parent not in self.neighbors.keys() and self.parent is not None:
+            if self.parent is not None and self.parent not in self.neighbors.keys():
                 self.parent = None
                 self.update_parent()
                 
@@ -345,8 +338,6 @@ class Node:
                     for neighbor in self.neighbors.keys():
                         self.network.send_message(self, neighbor, Message("GR", {'nr': self.last_gr + 1}, self.node_id))
                 else:
-                    if self.log:
-                        print(f"13: Node {self.node_id} sending DAO to parent {self.parent}")
                     self.network.send_message(self, self.parent,
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
 
@@ -402,7 +393,7 @@ class Node:
                 #Update the nodes ip routing table
                 self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
                 self.ip_routing_table[ip_address] = value
-                
+
     @staticmethod
     def objective_function(parent_rank, rank_step):
         rank_factor = 1
