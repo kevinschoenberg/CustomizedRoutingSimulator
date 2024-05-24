@@ -47,48 +47,6 @@ class Node:
         self.ip_prefix = None
         self.received_DAO = False
 
-    def update_ip_routing_table(self):
-        self.ip_routing_table = {}
-        self.subnet_routing_table = {}
-        ip_address = None
-        ip_prefix = None
-        subnet = None
-        ip_temp = 0
-        subnet_temp = 0
-        if self.isLBR:
-            ip_temp += 1
-            self.subnet = '2001:'
-            self.ip_address = f'2001::{ip_temp}'
-
-        for value in Counter(self.routing_table.values()).keys():
-            ip_temp += 1
-            subnet_temp += 1
-            if self.isLBR:
-                subnet = f'2001:{hex(subnet_temp)[2:]}'
-                ip_prefix = 16 + len(hex(subnet_temp)[2:]) * 4
-                ip_address = f'2001::{hex(ip_temp)[2:]}'
-            if not self.isLBR and self.ip_prefix is not None:
-                ip_address = f'{self.subnet}::{hex(ip_temp)[2:]}'
-                if ((len(self.subnet) - (math.floor(len(self.subnet) / 5))) % 4 > 0):
-                    subnet = f'{self.subnet}{hex(subnet_temp)[2:]}'
-                else:
-                    subnet = f'{self.subnet}:{hex(subnet_temp)[2:]}'
-                ip_prefix = self.ip_prefix + len(hex(subnet_temp)[2:]) * 4
-            if subnet is not None and self.rank is not None:
-                #Send DIO message to Node with id = value, informing them of their subnet
-                self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
-                                                                       'routing_table': self.routing_table,
-                                                                       'instanceID': self.instanceID, 'subnet': subnet,
-                                                                       'ip_address': ip_address, 'prefix': ip_prefix, 'grounded': self.grounded},
-                                                               self.node_id))
-                #Update the nodes ip routing table
-                self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
-                self.ip_routing_table[ip_address] = value
-        #if self.log:
-            #print(f"MAC: Node {self.node_id} routing table = {self.routing_table.items()}")
-            #print(f'IP: Node {self.node_id} ip routing table = {self.ip_routing_table.items()}')
-            #print(f'IP: Node {self.node_id} subnet routing table = {self.subnet_routing_table.items()}')
-
     def run(self):
         self.dis_interval *= random.uniform(1, 4)
         self.original_dis_interval = self.dis_interval
@@ -317,7 +275,7 @@ class Node:
                     # Inform old parent that node is no longer child
                     if old_parent is not None:
                         self.network.send_message(self, old_parent,
-                                              Message("DAO-ACK", {'isChild': False, 'isParent': False, 'routing_table': self.routing_table}, self.node_id))
+                                              Message("DAO-ACK", {'isChild': False, 'routing_table': self.routing_table}, self.node_id))
                     # Send DAO message to parent, if a new one is selected
                     self.network.send_message(self, self.parent,
                                               Message("DAO", {'routing_table': self.routing_table}, self.node_id))
@@ -407,6 +365,44 @@ class Node:
 
             self.routing_table[sender_id] = sender_id
 
+    def update_ip_routing_table(self):
+        self.ip_routing_table = {}
+        self.subnet_routing_table = {}
+        ip_address = None
+        ip_prefix = None
+        subnet = None
+        ip_temp = 0
+        subnet_temp = 0
+        if self.isLBR:
+            ip_temp += 1
+            self.subnet = '2001:'
+            self.ip_address = f'2001::{ip_temp}'
+
+        for value in Counter(self.routing_table.values()).keys():
+            ip_temp += 1
+            subnet_temp += 1
+            if self.isLBR:
+                subnet = f'2001:{hex(subnet_temp)[2:]}'
+                ip_prefix = 16 + len(hex(subnet_temp)[2:]) * 4
+                ip_address = f'2001::{hex(ip_temp)[2:]}'
+            if not self.isLBR and self.ip_prefix is not None:
+                ip_address = f'{self.subnet}::{hex(ip_temp)[2:]}'
+                if ((len(self.subnet) - (math.floor(len(self.subnet) / 5))) % 4 > 0):
+                    subnet = f'{self.subnet}{hex(subnet_temp)[2:]}'
+                else:
+                    subnet = f'{self.subnet}:{hex(subnet_temp)[2:]}'
+                ip_prefix = self.ip_prefix + len(hex(subnet_temp)[2:]) * 4
+            if subnet is not None and self.rank is not None:
+                #Send DIO message to Node with id = value, informing them of their subnet
+                self.network.send_message(self, value, Message("DIO", {'DAGrank': self.DAGrank, 'rank': self.rank,
+                                                                       'routing_table': self.routing_table,
+                                                                       'instanceID': self.instanceID, 'subnet': subnet,
+                                                                       'ip_address': ip_address, 'prefix': ip_prefix, 'grounded': self.grounded},
+                                                               self.node_id))
+                #Update the nodes ip routing table
+                self.subnet_routing_table[f'{subnet}::/{ip_prefix}'] = ip_address
+                self.ip_routing_table[ip_address] = value
+                
     @staticmethod
     def objective_function(parent_rank, rank_step):
         rank_factor = 1
