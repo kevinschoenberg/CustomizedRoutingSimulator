@@ -29,7 +29,7 @@ class Network:
         self.remove = True
         self.remove2 = True
         self.remove3 = True
-        self.action = env.process(self.run())
+        self.run_action = env.process(self.run())
         self.plot_action = env.process(self.update_plot())
         self.fig, self.ax = plt.subplots(figsize=(10, 10))
         self.plot_count = 0
