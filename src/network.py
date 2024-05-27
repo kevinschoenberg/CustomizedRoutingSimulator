@@ -119,7 +119,7 @@ class Network:
                     self.ax.plot(node.position[0], node.position[1], 'ro')
 
                 #plot node range in a circle
-                if node.log or node.node_id==3:
+                if node.log:
                     self.ax.add_patch(plt.Circle((node.position[0], node.position[1]), node.range, color='gray', fill=False, zorder=1))
 
             #Parents
