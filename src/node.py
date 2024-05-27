@@ -249,10 +249,11 @@ class Node:
 
             if not self.grounded and self.env.now - self.last_dis > self.dis_interval:
                 #multiply dis_interval by a random number between 1 and 2
-                self.dis_interval = self.dis_interval
+                self.dis_interval = self.dis_interval * random.uniform(1, 2)
                 self.dis_count += 1
                 for neighbor in self.neighbors.keys():
                     self.network.send_message(self, neighbor, Message("DIS", None, self.node_id))
+                    print(f"Node {self.node_id} sending DIS to neighbor {neighbor}")
                 self.last_dis = self.env.now
 
             if self.received_DAO:

@@ -28,6 +28,7 @@ class Network:
         self.connections = []
         self.remove = True
         self.remove2 = True
+        self.remove3 = True
         self.action = env.process(self.run())
         self.plot_action = env.process(self.update_plot())
         self.fig, self.ax = plt.subplots(figsize=(10, 10))
@@ -38,7 +39,7 @@ class Network:
         self.generate_connections()
 
         while True:
-            if self.env.now > 15 and self.remove:
+            if self.env.now > 2000 and self.remove:
                 node_id = 5
                 print(f"Removing node {self.nodes[node_id].node_id}")
                 self.nodes[node_id].alive = False
@@ -51,11 +52,15 @@ class Network:
 
 
             if self.env.now > 80 and self.remove2:
-                self.add_node(Node(self.env, 'Node{}'.format(len(self.nodes)), (3.5, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
-                self.add_node(
-                    Node(self.env, 'Node{}'.format(len(self.nodes)), (3, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval,
-                         self.dis_interval, is_lbr=False, log=False))
+                self.add_node(Node(self.env, 'Node{}'.format(len(self.nodes)), (2.6, 5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
+                #self.add_node(Node(self.env, 'Node{}'.format(len(self.nodes)), (3, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
                 self.remove2 = False
+                self.generate_connections()
+
+            if self.env.now > 150 and self.remove3:
+                self.add_node(Node(self.env, 'Node{}'.format(len(self.nodes)), (5, 2.6), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
+                #self.add_node(Node(self.env, 'Node{}'.format(len(self.nodes)), (3, 3.5), self, 1.3, len(self.nodes), self.heartbeat_interval, self.dis_interval, is_lbr=False, log=False))
+                self.remove3 = False
                 self.generate_connections()
             yield self.env.timeout(1)
     
@@ -114,7 +119,7 @@ class Network:
                     self.ax.plot(node.position[0], node.position[1], 'ro')
 
                 #plot node range in a circle
-                if node.log:
+                if node.log or node.node_id==3:
                     self.ax.add_patch(plt.Circle((node.position[0], node.position[1]), node.range, color='gray', fill=False, zorder=1))
 
             #Parents

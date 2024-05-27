@@ -17,15 +17,14 @@ PLOT_INTERVAL = 1
 HEARTBEAT_INTERVAL = 20
 
 DIS_INTERVAL = 5
-
-PLOT_TIMES = [90]
+PLOT_TIMES = [90, 150, 160, 170]
 
 
 def main():
     env = simpy.Environment()
     network = Network(env, NUM_NODES, AREA_X, AREA_Y, HEARTBEAT_INTERVAL, PLOT_INTERVAL, DIS_INTERVAL, PLOT_TIMES)
 
-    env.run(until=200)
+    env.run(until=300)
 
     # print the parent candidates fo each node
     for node in network.nodes:
